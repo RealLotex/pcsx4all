@@ -41,7 +41,7 @@ jobs:
       - name: Compare interpreter with baseline and experimental dynarec under MIPS emulation
         run: |
           sed -i '/^#define MIPSREC_SINGLE_SPILL$/d' src/recompiler/mips/regcache.h
-          sed -i '/^C_ARCH =/a C_ARCH += -DMIPSREC_DIFFERENTIAL_TEST' Makefile
+          sed -i '/^C_ARCH =/a C_ARCH += -DMIPSREC_DIFFERENTIAL_TEST -DMIPSREC_PROFILE' Makefile
           sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
           result=0
           for mode in baseline experimental; do

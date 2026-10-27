@@ -38,6 +38,14 @@ typedef struct {
 
 RecRegisters regcache;
 
+// Optional JIT-time counters. Normal builds emit no profiling code.
+#ifdef MIPSREC_PROFILE
+static struct {
+	u32 blocks, clear_calls, clear_nonempty;
+	u32 pressure_passes, evicted_mappings, dirty_evictions;
+} mipsrec_profile;
+#endif
+
 // Stack for regPushState()/regPopState()
 static int          regcache_bak_idx  = 0;
 static const int    regcache_bak_size = 8; // Abitrary size choice (overkill?)
@@ -71,6 +79,9 @@ static void regFreeRegs(void)
 	//DEBUGF("regFreeRegs\n");
 	int i = 0;
 	int firstfound = 0;
+#ifdef MIPSREC_PROFILE
+	++mipsrec_profile.pressure_passes;
+#endif
 #ifdef MIPSREC_SINGLE_SPILL
 	int victim = -1;
 	u32 oldest = 0;
@@ -94,6 +105,10 @@ static void regFreeRegs(void)
 #endif
 		) {
 			int psxreg = regcache.host[hostreg].mappedto;
+#ifdef MIPSREC_PROFILE
+			if (regcache.host[hostreg].ismapped) ++mipsrec_profile.evicted_mappings;
+			if (regcache.psx[psxreg].psx_ischanged) ++mipsrec_profile.dirty_evictions;
+#endif
 
 			if (regcache.psx[psxreg].psx_ischanged) {
 				SW(hostreg, PERM_REG_1, offGPR(psxreg));

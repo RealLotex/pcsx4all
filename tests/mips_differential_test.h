@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include "psxevents.h"
 extern u32 *recMem;
+#ifdef MIPSREC_PROFILE
+extern void recProfileDump();
+#endif
 static u32 diff_rng = 0x39e07d5u;
 static u32 diff_random() { diff_rng ^= diff_rng << 13; diff_rng ^= diff_rng >> 17; diff_rng ^= diff_rng << 5; return diff_rng; }
 static int run_mips_differential_test()
@@ -239,5 +242,8 @@ static int run_mips_differential_test()
     psxRec.ExecuteBlock(end);
     if (psxRegs.GPR.r[1]!=10) { puts("FAIL self-modifying block invalidation"); return 1; }
     puts("PASS rewritten block is invalidated and recompiled");
+#ifdef MIPSREC_PROFILE
+    recProfileDump();
+#endif
     return 0;
 }

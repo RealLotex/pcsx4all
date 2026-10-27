@@ -17,12 +17,13 @@ These synthetic traces do not represent a game and the model is not a PS1 CPU.
 The separate QEMU MIPS test build executes both the real interpreter and dynarec
 using the same initial CPU state and RAM. It tests 200 seeded blocks containing
 ADDU/ADDIU, MULTU, MTC2, aligned LW/LB/LH/SW/SB, unaligned LWL/LWR/SWL/SWR,
-and a J delay slot, and compares GPR/HI/LO, PC, CP0, CP2 and 2 MiB RAM. It also
+selected MFC2/LWC2/SWC2 registers and a J delay slot, and compares GPR/HI/LO, PC, CP0, CP2 and 2 MiB RAM. It also
 checks a non-delay-slot SYSCALL against the expected exception vector, cause and
 EPC, and verifies that a C-side write invalidates the start of an already
 compiled block. Both allocator modes are tested with this branch's GTE correction.
-These cases do not cover MFC2/LWC2/SWC2, load-use hazards, exceptions in delay
-slots, arbitrary self-modifying code, all instruction values or real hardware.
+These cases do not cover special-effect GTE transfer registers, load-use hazards,
+exceptions in delay slots, arbitrary self-modifying code, all instruction values
+or real hardware.
 
 The expanded test exposed an existing difference in MTC2 to IRGB: the interpreter
 writes only the low 16 bits of IR1–IR3, while the dynarec overwrote all 32 bits.

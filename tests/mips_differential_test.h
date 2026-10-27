@@ -26,6 +26,7 @@ static int run_mips_differential_test()
     memset(psxH, 0, 0x10000);
     psxEvqueueInit();
     const u32 start=0x80010000u, end=0x80012000u;
+    unsigned long generated_words=0;
     for (unsigned trial=0; trial<200; ++trial) {
         if (!trial) printf("TEST first trial psxM=%p recMem=%p\n", (void *)psxM, (void *)recMem);
         memset(psxM, 0, 0x200000);
@@ -106,7 +107,10 @@ static int run_mips_differential_test()
         memcpy(psxM, initial_ram, sizeof(initial_ram));
         psxRegs=initial;
         if (!trial) puts("TEST dynarec start");
-        psxCpu=&psxRec; psxRec.Reset(); psxRec.ExecuteBlock(end);
+        psxCpu=&psxRec; psxRec.Reset();
+        u32 *const code_start=recMem;
+        psxRec.ExecuteBlock(end);
+        generated_words += (unsigned long)(recMem - code_start);
         if (!trial) puts("TEST dynarec end");
         for (unsigned r=0; r<34; ++r) if (psxRegs.GPR.r[r]!=expected.GPR.r[r]) {
             printf("FAIL trial %u GPR %u: interpreter=%08x dynarec=%08x\n",trial,r,expected.GPR.r[r],psxRegs.GPR.r[r]);
@@ -134,6 +138,7 @@ static int run_mips_differential_test()
         }
     }
     puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/HI-LO/GTE and CPU/GTE load-store blocks and jump delay slots");
+    printf("Generated MIPS instructions for randomized blocks: %lu\n", generated_words);
     // Test a non-delay-slot SYSCALL against both the interpreter and the
     // architectural exception code, EPC, and vector.
     u32 *program=(u32 *)(psxM+0x10000);

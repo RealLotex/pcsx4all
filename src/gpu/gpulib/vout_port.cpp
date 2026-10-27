@@ -41,6 +41,10 @@
 #define s32 int32_t
 #define s64 int64_t
 
+// Paired framebuffer pixels as a 32-bit word. RS-97 MIPS is little-endian.
+// may_alias avoids C++ strict-aliasing violations; writes require alignment.
+typedef u32 __attribute__((__may_alias__)) pixel_pair_t;
+
 bool use_clip_368;
 
 static inline u16 middle(u16 s1, u16 s2, u16 s3)
@@ -153,6 +157,20 @@ static inline void GPU_Blit512(const void* src, u16* dst16, bool isRGB24)
 	if (!isRGB24)
 	{
 #ifndef USE_BGR15
+		// Pixel-skip 512->320: pack five RGB565 output pairs per block.
+		if (gpu_unai_config_ext.pixel_skip && (((uintptr_t)dst16 & 3u) == 0)) {
+			const u16 *s = (const u16*)src;
+			pixel_pair_t *d = (pixel_pair_t*)(void*)dst16;
+			for (unsigned i = 0; i < 32; ++i, s += 16, d += 5) {
+				d[0] = RGB16X2((u32)s[0]  | ((u32)s[1]  << 16));
+				d[1] = RGB16X2((u32)s[3]  | ((u32)s[4]  << 16));
+				d[2] = RGB16X2((u32)s[6]  | ((u32)s[8]  << 16));
+				d[3] = RGB16X2((u32)s[9]  | ((u32)s[11] << 16));
+				d[4] = RGB16X2((u32)s[12] | ((u32)s[14] << 16));
+			}
+			return;
+		}
+
 		uCount = 32;
 		u16* src16 = (u16*)src;
 		do {
@@ -226,6 +244,20 @@ static inline void GPU_Blit384(const void* src, u16* dst16, bool isRGB24)
 	if (!isRGB24)
 	{
 #ifndef USE_BGR15
+		// Pixel-skip 384->320: packed output pairs.
+		if (gpu_unai_config_ext.pixel_skip && (((uintptr_t)dst16 & 3u) == 0)) {
+			const u16 *s = (const u16*)src;
+			pixel_pair_t *d = (pixel_pair_t*)(void*)dst16;
+			for (unsigned i = 0; i < 32; ++i, s += 12, d += 5) {
+				d[0] = RGB16X2((u32)s[0] | ((u32)s[1]  << 16));
+				d[1] = RGB16X2((u32)s[2] | ((u32)s[3]  << 16));
+				d[2] = RGB16X2((u32)s[4] | ((u32)s[6]  << 16));
+				d[3] = RGB16X2((u32)s[7] | ((u32)s[8]  << 16));
+				d[4] = RGB16X2((u32)s[9] | ((u32)s[10] << 16));
+			}
+			return;
+		}
+
 		uCount = 32;
 		u16* src16 = (u16*)src;
 		do {
@@ -469,6 +501,20 @@ static inline void GPU_Blit256(const void* src, u16* dst16, bool isRGB24)
 	if (!isRGB24)
 	{
 #ifndef USE_BGR15
+		// 256->320: preserve nearest-neighbor duplication, paired stores.
+		if (((uintptr_t)dst16 & 3u) == 0) {
+			const u16 *s = (const u16*)src;
+			pixel_pair_t *d = (pixel_pair_t*)(void*)dst16;
+			for (unsigned i = 0; i < 32; ++i, s += 8, d += 5) {
+				d[0] = RGB16X2((u32)s[0] | ((u32)s[1] << 16));
+				d[1] = RGB16X2((u32)s[1] | ((u32)s[2] << 16));
+				d[2] = RGB16X2((u32)s[3] | ((u32)s[4] << 16));
+				d[3] = RGB16X2((u32)s[5] | ((u32)s[5] << 16));
+				d[4] = RGB16X2((u32)s[6] | ((u32)s[7] << 16));
+			}
+			return;
+		}
+
 		uCount = 32;
 		const u16* src16 = (const u16*) src;
 		do {
@@ -525,6 +571,16 @@ static inline void GPU_Blit640(const void* src, u16* dst16, bool isRGB24)
 	u32 uCount;
 	if (!isRGB24) {
 #ifndef USE_BGR15
+		// Pixel-skip 640->320: pack two sampled RGB565 pixels per store.
+		if (gpu_unai_config_ext.pixel_skip && (((uintptr_t)dst16 & 3u) == 0)) {
+			const u16 *s = (const u16*)src;
+			pixel_pair_t *d = (pixel_pair_t*)(void*)dst16;
+			for (unsigned i = 0; i < 160; ++i, s += 4) {
+				d[i] = RGB16X2((u32)s[0] | ((u32)s[2] << 16));
+			}
+			return;
+		}
+
 		uCount = 20;
 		u16* src16 = (u16*)src;
 		do {

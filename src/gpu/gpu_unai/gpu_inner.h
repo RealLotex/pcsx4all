@@ -263,7 +263,25 @@ static void gpuTileSpanFn(u16 *pDst, u32 count, u16 data)
 {
 	if (!CF_MASKCHECK && !CF_BLEND) {
 		if (CF_MASKSET) { data = data | 0x8000; }
-		do { *pDst++ = data; } while (--count);
+		if (count < 8) {
+			do { *pDst++ = data; } while (--count);
+		} else {
+			// 32-bit aligned stores fill two adjacent opaque tile pixels.
+			typedef u32 __attribute__((__may_alias__)) tile_pair_t;
+			if ((uintptr_t)pDst & 2u) {
+				*pDst++ = data;
+				--count;
+			}
+			tile_pair_t *dst = (tile_pair_t*)(void*)pDst;
+			const tile_pair_t packed = (u32)data | ((u32)data << 16);
+			u32 pairs = count >> 1;
+			while (pairs--) {
+				*dst++ = packed;
+			}
+			if (count & 1u) {
+				*(u16*)(void*)dst = data;
+			}
+		}
 	} else if (CF_MASKCHECK && !CF_BLEND) {
 		if (CF_MASKSET) { data = data | 0x8000; }
 		do { if (!(*pDst&0x8000)) { *pDst = data; } pDst++; } while (--count);

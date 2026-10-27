@@ -14,6 +14,16 @@ emitted 846147 and 899997. A nine-register pressure trace emitted 16 loads and
 16 stores in each version; a naive first-victim policy emitted 2008 of each.
 These synthetic traces do not represent a game and the model is not a PS1 CPU.
 
+With `MIPSREC_PROFILE` defined, optional counters report compiled blocks, calls
+to `recClear`, calls whose page is marked as code, allocation pressure passes,
+evicted mappings, and dirty eviction stores. They are logged at dynarec shutdown.
+They count JIT-time events and C-side `recClear`, not dispatcher hits or all inline
+invalidations, and profiling changes timing; leave the flag off for final timing.
+In the seeded QEMU test, baseline emitted 70820 MIPS instructions and experimental
+68028. Profiled baseline had 2279 pressure passes and 16514 mapped evictions;
+experimental had 13071 passes and 13071 mapped evictions. More passes can increase
+compilation cost, and neither these counts nor QEMU establish RS-97 FPS.
+
 The separate QEMU MIPS test build executes both the real interpreter and dynarec
 using the same initial CPU state and RAM. It tests 200 seeded blocks containing
 ADDU/ADDIU, MULTU, MTC2, aligned LW/LB/LH/SW/SB, unaligned LWL/LWR/SWL/SWR,

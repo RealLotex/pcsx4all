@@ -71,12 +71,28 @@ static void regFreeRegs(void)
 	//DEBUGF("regFreeRegs\n");
 	int i = 0;
 	int firstfound = 0;
+#ifdef MIPSREC_SINGLE_SPILL
+	int victim = -1;
+	u32 oldest = 0;
+	for (int n = 0; regcache.reglist[n] != 0xFF; ++n) {
+		const int r = regcache.reglist[n];
+		if (!regcache.host[r].host_islocked &&
+		    (victim < 0 || regcache.host[r].host_age > oldest)) {
+			victim = n;
+			oldest = regcache.host[r].host_age;
+		}
+	}
+#endif
 
 	while (regcache.reglist[i] != 0xFF) {
 		int hostreg = regcache.reglist[i];
 		//DEBUGF("spilling %dth reg (%d)", i, hostreg);
 
-		if (!regcache.host[hostreg].host_islocked) {
+		if (!regcache.host[hostreg].host_islocked
+#ifdef MIPSREC_SINGLE_SPILL
+		    && i == victim
+#endif
+		) {
 			int psxreg = regcache.host[hostreg].mappedto;
 
 			if (regcache.psx[psxreg].psx_ischanged) {
@@ -96,6 +112,11 @@ static void regFreeRegs(void)
 				//DEBUGF("setting reglist_cnt %d", i);
 				firstfound = 1;
 			}
+#ifdef MIPSREC_SINGLE_SPILL
+			// Keep the remaining mappings alive when one free slot is enough.
+			// This is experimental until the MIPS differential tests pass.
+			break;
+#endif
 		}
 		//else DEBUGF("locked :(");
 
@@ -197,6 +218,9 @@ static u32 regMipsToHost(u32 regpsx, u32 action, u32 type)
 		if (action != REG_LOADBRANCH) {
 			int hostreg = regcache.psx[regpsx].mappedto;
 			regcache.host[hostreg].host_islocked++;
+#ifdef MIPSREC_SINGLE_SPILL
+			regcache.host[hostreg].host_age = 0;
+#endif
 
 			return hostreg;
 		} else {

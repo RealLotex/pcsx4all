@@ -95,10 +95,22 @@ static int run_mips_differential_test()
         if (memcmp(expected_ram, psxM, sizeof(expected_ram))) {
             printf("FAIL trial %u RAM differs\n", trial); return 1;
         }
-        if (psxRegs.pc!=expected.pc || memcmp(&psxRegs.CP0,&expected.CP0,sizeof(psxRegs.CP0)) ||
-            memcmp(&psxRegs.CP2D,&expected.CP2D,sizeof(psxRegs.CP2D)) ||
-            memcmp(&psxRegs.CP2C,&expected.CP2C,sizeof(psxRegs.CP2C))) {
-            printf("FAIL trial %u PC/CP state\n",trial); return 1;
+        bool mismatch=psxRegs.pc!=expected.pc;
+        for (unsigned r=0; r<32; ++r) {
+            if (psxRegs.CP0.r[r]!=expected.CP0.r[r]) {
+                printf("CP0[%u] interpreter=%08x dynarec=%08x\n",r,expected.CP0.r[r],psxRegs.CP0.r[r]); mismatch=true;
+            }
+            if (psxRegs.CP2D.r[r]!=expected.CP2D.r[r]) {
+                printf("CP2D[%u] interpreter=%08x dynarec=%08x\n",r,expected.CP2D.r[r],psxRegs.CP2D.r[r]); mismatch=true;
+            }
+            if (psxRegs.CP2C.r[r]!=expected.CP2C.r[r]) {
+                printf("CP2C[%u] interpreter=%08x dynarec=%08x\n",r,expected.CP2C.r[r],psxRegs.CP2C.r[r]); mismatch=true;
+            }
+        }
+        if (mismatch) {
+            printf("FAIL trial %u PC interpreter=%08x dynarec=%08x\n",trial,expected.pc,psxRegs.pc);
+            for (unsigned i=0; i<122; ++i) printf("%03u: %08x\n",i,program[i]);
+            return 1;
         }
     }
     puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/HI-LO/GTE/load-store blocks and jump delay slots");

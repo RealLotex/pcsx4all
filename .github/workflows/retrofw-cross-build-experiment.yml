@@ -42,13 +42,15 @@ jobs:
           sed -i '/^#define MIPSREC_SINGLE_SPILL$/d' src/recompiler/mips/regcache.h
           sed -i '/^C_ARCH =/a C_ARCH += -DMIPSREC_DIFFERENTIAL_TEST' Makefile
           sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
+          result=0
           for mode in baseline experimental; do
             make clean
             if [ "$mode" = experimental ]; then sed -i '1i#define MIPSREC_SINGLE_SPILL' src/recompiler/mips/regcache.h; fi
             make -j2 all CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
             echo "Testing $mode"
-            timeout 120s qemu-mipsel -strace -L "$sysroot" pcsx4all/pcsx4all.dge 2>/tmp/qemu-trace.log || { tail -n 80 /tmp/qemu-trace.log; exit 1; }
+            timeout 120s qemu-mipsel -strace -L "$sysroot" pcsx4all/pcsx4all.dge 2>/tmp/qemu-trace.log || { tail -n 20 /tmp/qemu-trace.log; result=1; }
           done
+          exit "$result"
       - uses: actions/upload-artifact@v4
         with:
           name: retrofw-cross-build-comparison

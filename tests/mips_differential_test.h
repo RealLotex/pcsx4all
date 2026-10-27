@@ -35,7 +35,7 @@ static int run_mips_differential_test()
         for (unsigned i=0; i<120; ++i) {
             const u32 d=1+diff_random()%25, s=1+diff_random()%25;
             const u32 offset=diff_random() & 0xff;
-            switch (diff_random()%12) {
+            switch (diff_random()%15) {
             case 0: {
                 const u32 t=1+diff_random()%25;
                 program[i]=(s<<21)|(t<<16)|(d<<11)|0x21; // ADDU
@@ -54,6 +54,26 @@ static int run_mips_differential_test()
             case 7: {
                 const u32 cpreg=diff_random()%32;
                 program[i]=(0x12u<<26)|(4u<<21)|(d<<16)|(cpreg<<11); // MTC2
+                break;
+            }
+            case 8: {
+                if (i == 119) { program[i]=0; break; }
+                const u32 safe_regs[] = { 0,2,4,6,12,13,14,20,21,22,23,24,25,26,27,30,31 };
+                const u32 cpreg=safe_regs[diff_random() % (sizeof(safe_regs)/sizeof(safe_regs[0]))];
+                program[i]=(0x12u<<26)|(d<<16)|(cpreg<<11); // MFC2
+                program[++i]=0;
+                break;
+            }
+            case 9: {
+                if (i == 119) { program[i]=0; break; }
+                const u32 cpreg=(diff_random()%4)*2;
+                program[i]=(0x32u<<26)|(26u<<21)|(cpreg<<16)|(offset&~3u); // LWC2
+                program[++i]=0;
+                break;
+            }
+            case 10: {
+                const u32 cpreg=(diff_random()%4)*2;
+                program[i]=(0x3au<<26)|(26u<<21)|(cpreg<<16)|(offset&~3u); // SWC2
                 break;
             }
             default: {
@@ -113,7 +133,7 @@ static int run_mips_differential_test()
             return 1;
         }
     }
-    puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/HI-LO/GTE/load-store blocks and jump delay slots");
+    puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/HI-LO/GTE and CPU/GTE load-store blocks and jump delay slots");
     // Test a non-delay-slot SYSCALL against both the interpreter and the
     // architectural exception code, EPC, and vector.
     u32 *program=(u32 *)(psxM+0x10000);

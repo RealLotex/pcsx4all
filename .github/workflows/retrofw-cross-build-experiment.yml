@@ -1,0 +1,44 @@
+name: RetroFW cross-build experiment
+on:
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  retrofw-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install official RetroFW SDK
+        run: |
+          curl --fail --location --retry 3 -o /tmp/retrofw-sdk.tar.gz https://github.com/retrofw/retrofw.github.io/releases/download/v2.3/mipsel-RetroFW-linux-uclibc_sdk-buildroot.tar.gz
+          echo '8ceda398f9f4ba6d64c3c48c8699c0d6b2617090ca3a56db1a547ad7d5e0b80a  /tmp/retrofw-sdk.tar.gz' | sha256sum -c -
+          sudo mkdir -p /opt/retrofw-sdk
+          sudo chown "$USER" /opt/retrofw-sdk
+          tar -xzf /tmp/retrofw-sdk.tar.gz -C /opt/retrofw-sdk --strip-components=1
+          /opt/retrofw-sdk/relocate-sdk.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y squashfs-tools
+      - name: Build original release, master, and experimental MIPS versions
+        run: |
+          git worktree add --detach /tmp/pcsx-original 8ffea9c192cf83da6918600afbb4ee86cdb1488b
+          git worktree add --detach /tmp/pcsx-master "${{ github.event.pull_request.base.sha }}"
+          for variant in original master experimental; do
+            case "$variant" in
+              original) dir=/tmp/pcsx-original ;;
+              master) dir=/tmp/pcsx-master ;;
+              experimental) dir="$GITHUB_WORKSPACE"; sed -i '1i#define MIPSREC_SINGLE_SPILL' "$dir/src/recompiler/mips/regcache.h" ;;
+            esac
+            make -C "$dir" -j2 opk CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+            cp "$dir/pcsx4all/pcsx4all.opk" "/tmp/$variant.opk"
+            /opt/retrofw-sdk/bin/mipsel-linux-readelf -h "$dir/pcsx4all/pcsx4all.dge"
+            sha256sum "/tmp/$variant.opk"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retrofw-cross-build-comparison
+          path: /tmp/*.opk
+          retention-days: 7

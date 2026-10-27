@@ -21,7 +21,7 @@ jobs:
           tar -xzf /tmp/retrofw-sdk.tar.gz -C /opt/retrofw-sdk --strip-components=1
           /opt/retrofw-sdk/relocate-sdk.sh
           sudo apt-get update -qq
-          sudo apt-get install -y squashfs-tools
+          sudo apt-get install -y squashfs-tools qemu-user
       - name: Build original release, master, and experimental MIPS versions
         run: |
           git worktree add --detach /tmp/pcsx-original 8ffea9c192cf83da6918600afbb4ee86cdb1488b
@@ -37,6 +37,13 @@ jobs:
             /opt/retrofw-sdk/bin/mipsel-linux-readelf -h "$dir/pcsx4all/pcsx4all.dge"
             sha256sum "/tmp/$variant.opk"
           done
+      - name: Run interpreter and experimental dynarec under MIPS emulation
+        run: |
+          make clean
+          sed -i '/^C_ARCH =/a C_ARCH += -DMIPSREC_DIFFERENTIAL_TEST -DMIPSREC_SINGLE_SPILL' Makefile
+          make -j2 all CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
+          timeout 120s qemu-mipsel -L "$sysroot" pcsx4all/pcsx4all.dge
       - uses: actions/upload-artifact@v4
         with:
           name: retrofw-cross-build-comparison

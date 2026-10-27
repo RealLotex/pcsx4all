@@ -139,6 +139,35 @@ static int run_mips_differential_test()
     }
     puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/HI-LO/GTE and CPU/GTE load-store blocks and jump delay slots");
     printf("Generated MIPS instructions for randomized blocks: %lu\n", generated_words);
+    // IRGB updates the low halves of IR1-IR3 and must retain the upper
+    // halves. Also check that the JIT really emitted MIPS32 SH instructions.
+    u32 *gte_program=(u32 *)(psxM+0x10000);
+    gte_program[0]=(0x12u<<26)|(4u<<21)|(2u<<16)|(28u<<11);
+    gte_program[1]=(2u<<26)|((end>>2)&0x03ffffffu);
+    gte_program[2]=0;
+    psxRegs.pc=start; psxRegs.GPR.r[2]=0x7fffu;
+    psxRegs.CP2D.r[9]=0xaabb1357u; psxRegs.CP2D.r[10]=0xccdd2468u; psxRegs.CP2D.r[11]=0x1234abcdu;
+    const psxRegisters gte_start=psxRegs;
+    psxCpu=&psxInt; psxInt.ExecuteBlock(end);
+    const psxRegisters gte_expected=psxRegs;
+    if (gte_expected.CP2D.r[9]!=0xaabb0f80u || gte_expected.CP2D.r[10]!=0xccdd0f80u ||
+        gte_expected.CP2D.r[11]!=0x12340f80u) { puts("FAIL interpreter IRGB fields"); return 1; }
+    psxRegs=gte_start; psxCpu=&psxRec; psxRec.Reset();
+    u32 *const gte_code_start=recMem;
+    psxRec.ExecuteBlock(end);
+    if (memcmp(&psxRegs.CP2D,&gte_expected.CP2D,sizeof(psxRegs.CP2D))) {
+        puts("FAIL dynarec IRGB fields"); return 1;
+    }
+    unsigned sh_found=0;
+    const unsigned ir_offset=(unsigned)((char *)&psxRegs.CP2D.r[9]-(char *)&psxRegs);
+    for (const u32 *insn=gte_code_start; insn<recMem; ++insn) {
+        if ((*insn>>26)==0x29u && ((*insn>>21)&31u)==30u) {
+            const unsigned off=*insn & 0xffffu;
+            if (off==ir_offset || off==ir_offset+4 || off==ir_offset+8) ++sh_found;
+        }
+    }
+    if (sh_found!=3) { printf("FAIL IRGB emitted %u expected 3 halfword stores\n",sh_found); return 1; }
+    puts("PASS IRGB preservation and three emitted MIPS32 halfword stores");
     // Test a non-delay-slot SYSCALL against both the interpreter and the
     // architectural exception code, EPC, and vector.
     u32 *program=(u32 *)(psxM+0x10000);

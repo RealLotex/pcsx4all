@@ -187,6 +187,27 @@ static int run_mips_differential_test()
         puts("FAIL SYSCALL interpreter/dynarec state"); return 1;
     }
     puts("PASS SYSCALL exception vector, cause, EPC and CPU state");
+    // Branch to the exception vector with SYSCALL in the delay slot. This
+    // checks BD and EPC without running unbounded guest code after an error.
+    program[0]=(2u<<26)|((0x80000080u>>2)&0x03ffffffu);
+    program[1]=0x0000000cu;
+    psxRegs=exception_start; psxRegs.pc=start;
+    psxCpu=&psxInt; psxInt.ExecuteBlock(0x80000080u);
+    const psxRegisters delay_exception_expected=psxRegs;
+    if (delay_exception_expected.CP0.n.EPC!=start ||
+        (delay_exception_expected.CP0.n.Cause & 0x8000007cu)!=0x80000020u) {
+        puts("FAIL interpreter delay-slot SYSCALL cause/EPC"); return 1;
+    }
+    psxRegs=exception_start; psxRegs.pc=start;
+    psxCpu=&psxRec; psxRec.Reset(); psxRec.ExecuteBlock(0x80000080u);
+    if (psxRegs.pc!=delay_exception_expected.pc ||
+        memcmp(&psxRegs.CP0,&delay_exception_expected.CP0,sizeof(psxRegs.CP0)) ||
+        memcmp(&psxRegs.GPR,&delay_exception_expected.GPR,sizeof(psxRegs.GPR))) {
+        printf("FAIL delay-slot SYSCALL: expected cause=%08x EPC=%08x, got cause=%08x EPC=%08x\n",
+               delay_exception_expected.CP0.n.Cause, delay_exception_expected.CP0.n.EPC,
+               psxRegs.CP0.n.Cause, psxRegs.CP0.n.EPC); return 1;
+    }
+    puts("PASS delay-slot SYSCALL cause, BD bit, EPC and CPU state");
     // Invalidate the start of an already-compiled block through the normal
     // PS1 memory write path, then verify the modified instruction executes.
     program[0]=(9u<<26)|(1u<<21)|(1u<<16)|1u; // ADDIU r1,r1,1

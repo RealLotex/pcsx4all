@@ -19,6 +19,8 @@
 *   51 Franklin Street, Fifth Floor, Boston, MA 02111-1307 USA.           *
 ***************************************************************************/
 
+#include "gpu_opaque_fill.h"
+
 ///////////////////////////////////////////////////////////////////////////////
 // Inner loop driver instantiation file
 
@@ -263,25 +265,7 @@ static void gpuTileSpanFn(u16 *pDst, u32 count, u16 data)
 {
 	if (!CF_MASKCHECK && !CF_BLEND) {
 		if (CF_MASKSET) { data = data | 0x8000; }
-		if (count < 8) {
-			do { *pDst++ = data; } while (--count);
-		} else {
-			// 32-bit aligned stores fill two adjacent opaque tile pixels.
-			typedef u32 __attribute__((__may_alias__)) tile_pair_t;
-			if ((uintptr_t)pDst & 2u) {
-				*pDst++ = data;
-				--count;
-			}
-			tile_pair_t *dst = (tile_pair_t*)(void*)pDst;
-			const tile_pair_t packed = (u32)data | ((u32)data << 16);
-			u32 pairs = count >> 1;
-			while (pairs--) {
-				*dst++ = packed;
-			}
-			if (count & 1u) {
-				*(u16*)(void*)dst = data;
-			}
-		}
+		gpuFillOpaquePixels(pDst, count, data);
 	} else if (CF_MASKCHECK && !CF_BLEND) {
 		if (CF_MASKSET) { data = data | 0x8000; }
 		do { if (!(*pDst&0x8000)) { *pDst = data; } pDst++; } while (--count);
@@ -479,6 +463,17 @@ const PS gpuSpriteSpanDrivers[256] = {
 template<int CF>
 static void gpuPolySpanFn(const gpu_unai_t &gpu_unai, u16 *pDst, u32 count)
 {
+	// Opaque flat-shaded polygons are solid-color spans, just like tiles.
+	// Reuse the aligned paired-store path; textured, shaded, masked or
+	// blended polygons always retain their existing pixel-accurate path.
+	if (!CF_TEXTMODE && !CF_GOURAUD && !CF_BLEND && !CF_MASKCHECK) {
+		u16 color = gpu_unai.PixelData;
+		if (CF_MASKSET)
+			color |= 0x8000;
+		gpuFillOpaquePixels(pDst, count, color);
+		return;
+	}
+
 	// Blend func can save an operation if it knows uSrc MSB is unset.
 	//  Untextured prims can always skip this (src color MSB is always 0).
 	//  For textured prims, lighting funcs always return it unset. (bonus!)

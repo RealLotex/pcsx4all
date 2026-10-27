@@ -32,6 +32,7 @@ jobs:
               master) dir=/tmp/pcsx-master ;;
               experimental) dir="$GITHUB_WORKSPACE"; sed -i '1i#define MIPSREC_SINGLE_SPILL' "$dir/src/recompiler/mips/regcache.h" ;;
             esac
+            make -C "$dir" maketree CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
             make -C "$dir" -j2 opk CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
             cp "$dir/pcsx4all/pcsx4all.opk" "/tmp/$variant.opk"
             /opt/retrofw-sdk/bin/mipsel-linux-readelf -h "$dir/pcsx4all/pcsx4all.dge"
@@ -44,8 +45,9 @@ jobs:
           sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
           result=0
           for mode in baseline experimental; do
-            make clean
+            make clean CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
             if [ "$mode" = experimental ]; then sed -i '1i#define MIPSREC_SINGLE_SPILL' src/recompiler/mips/regcache.h; fi
+            make maketree CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
             make -j2 all CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
             echo "Testing $mode"
             timeout 120s qemu-mipsel -strace -L "$sysroot" pcsx4all/pcsx4all.dge 2>/tmp/qemu-trace.log || { tail -n 20 /tmp/qemu-trace.log; result=1; }

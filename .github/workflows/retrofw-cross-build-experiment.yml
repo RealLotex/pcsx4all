@@ -40,7 +40,7 @@ jobs:
       - name: Run interpreter and experimental dynarec under MIPS emulation
         run: |
           make clean
-          sed -i '/^C_ARCH =/a C_ARCH += -DMIPSREC_DIFFERENTIAL_TEST -DMIPSREC_SINGLE_SPILL' Makefile
+          sed -i '/^C_ARCH =/a C_ARCH += -DMIPSREC_DIFFERENTIAL_TEST' Makefile
           make -j2 all CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
           sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
           timeout 120s qemu-mipsel -strace -L "$sysroot" pcsx4all/pcsx4all.dge 2>/tmp/qemu-trace.log || { tail -n 80 /tmp/qemu-trace.log; exit 1; }

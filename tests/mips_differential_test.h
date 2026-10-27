@@ -2,6 +2,7 @@
 // Uses the real interpreter, recompiler and production guest memory mappings.
 #include <sys/mman.h>
 #include <stdint.h>
+#include "psxevents.h"
 extern u32 *recMem;
 static u32 diff_rng = 0x39e07d5u;
 static u32 diff_random() { diff_rng ^= diff_rng << 13; diff_rng ^= diff_rng >> 17; diff_rng ^= diff_rng << 5; return diff_rng; }
@@ -21,7 +22,9 @@ static int run_mips_differential_test()
     }
     memset(&psxRegs, 0, sizeof(psxRegs));
     psxRegs.psxM=psxM; psxRegs.psxP=psxP; psxRegs.psxH=psxH; psxRegs.psxR=psxR;
-    psxRegs.writeok=1; psxRegs.io_cycle_counter=0x7fffffffu;
+    psxRegs.writeok=1;
+    memset(psxH, 0, 0x10000);
+    psxEvqueueInit();
     const u32 start=0x80010000u, end=0x80012000u;
     for (unsigned trial=0; trial<200; ++trial) {
         if (!trial) printf("TEST first trial psxM=%p recMem=%p\n", (void *)psxM, (void *)recMem);
@@ -45,6 +48,8 @@ static int run_mips_differential_test()
         psxCpu=&psxInt; psxInt.ExecuteBlock(end);
         if (!trial) puts("TEST interpreter end");
         const psxRegisters expected=psxRegs;
+        static u8 expected_ram[0x200000];
+        memcpy(expected_ram, psxM, sizeof(expected_ram));
         psxRegs=initial;
         if (!trial) puts("TEST dynarec start");
         psxCpu=&psxRec; psxRec.Reset(); psxRec.ExecuteBlock(end);
@@ -52,6 +57,9 @@ static int run_mips_differential_test()
         for (unsigned r=0; r<34; ++r) if (psxRegs.GPR.r[r]!=expected.GPR.r[r]) {
             printf("FAIL trial %u GPR %u: interpreter=%08x dynarec=%08x\n",trial,r,expected.GPR.r[r],psxRegs.GPR.r[r]);
             return 1;
+        }
+        if (memcmp(expected_ram, psxM, sizeof(expected_ram))) {
+            printf("FAIL trial %u RAM differs\n", trial); return 1;
         }
         if (psxRegs.pc!=expected.pc || memcmp(&psxRegs.CP0,&expected.CP0,sizeof(psxRegs.CP0)) ||
             memcmp(&psxRegs.CP2D,&expected.CP2D,sizeof(psxRegs.CP2D)) ||

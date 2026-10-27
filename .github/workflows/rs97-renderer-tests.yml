@@ -1,0 +1,28 @@
+name: RS-97 renderer regression tests
+
+on:
+  push:
+    branches: [master, rs97-render-optimizations]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  host-renderer-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Compare packed pixels and opaque tile writes
+        run: |
+          g++ -std=c++11 -O2 -Wall -Wextra -Werror tests/test_rs97_render.cpp -o /tmp/test_rs97_render
+          /tmp/test_rs97_render
+      - name: Check memory safety with ASan/UBSan
+        run: |
+          clang++ -std=c++11 -O1 -g -Wall -Wextra -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_rs97_render.cpp -o /tmp/test_rs97_render_san
+          /tmp/test_rs97_render_san
+
+# This checks host-side pixel equivalence and memory bounds only.
+# It does not compile RetroFW firmware/OPK or test RS-97 hardware.

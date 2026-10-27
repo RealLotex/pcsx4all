@@ -28,3 +28,26 @@ Expected output: `pcsx4all/pcsx4all.opk`. Save your existing OPK first.
 These code paths passed host-side comparisons. The emulator has **not** been compiled with the RetroFW SDK in this environment, nor tested on RS-97 hardware. No end-to-end FPS gain is claimed. If the main bottleneck is MIPS dynarec or polygon rasterization, FPS improvement may be modest or absent.
 
 Compare original/modified OPKs using the same clock, saved scene, GPU settings and Show FPS. Inspect sprites, effects and menus for rendering regressions.
+
+## Device-safety review and rollback
+
+This source patch changes only GPU frame conversion and opaque tile stores:
+it adds no bootloader, kernel, MTD, partition, or firmware write operations.
+The existing emulator does persist user configuration, virtual memory card
+data and save states; those can be damaged by an unexpected crash. Keep backups.
+
+A permanently unbootable RS-97 is not an expected consequence of simply
+running this user-space OPK, but **hardware safety cannot be guaranteed**
+without building and testing the exact binary on the target device.
+Crashes, visual corruption, freezes and save-file damage remain possible.
+
+Before first use:
+1. Copy the **original working OPK** to your computer, outside the console's
+   scanned `opk` directory. Back up `~/.pcsx4all/memcards` and save states.
+2. Install the test OPK as an **application only**. Never flash a system image
+   or overwrite boot/firmware partitions to try this renderer patch.
+3. Test with an expendable save and several games. If it hangs, restart the
+   console and restore the original OPK. Avoid writing saves while testing.
+4. The `RS-97 renderer regression tests` GitHub workflow runs host-side
+   equality and sanitizer checks; it does not prove full MIPS binary
+   compatibility or an FPS gain on the real device.

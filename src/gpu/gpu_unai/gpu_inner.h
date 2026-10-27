@@ -20,6 +20,7 @@
 ***************************************************************************/
 
 #include "gpu_opaque_fill.h"
+#include "gpu_sprite_indexed_fast.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 // Inner loop driver instantiation file
@@ -343,6 +344,16 @@ static void gpuSpriteSpanFn(u16 *pDst, u32 count, u8* pTxt, u32 u0)
 
 	u16 uSrc, uDst, srcMSB;
 	u32 u0_mask = gpu_unai.TextureWindow[2];
+
+	// Fast path is allowed only for raw opaque 4bpp palette sprites.
+	// Texture/CLUT overlap, misalignment, odd UV and short spans fall back
+	// to the original serial pixel routine (important for self-texturing).
+	if (CF_TEXTMODE == 1 && !CF_LIGHT && !CF_BLEND &&
+	    !CF_MASKCHECK && !CF_MASKSET) {
+		if (gpuTryFastSprite4bppSpan(pDst, count, pTxt, u0,
+		                            u0_mask, gpu_unai.CBA))
+			return;
+	}
 
 	u8 r5, g5, b5;
 	if (CF_LIGHT) {

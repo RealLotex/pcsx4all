@@ -23,12 +23,18 @@ jobs:
         run: |
           g++ -std=c++03 -O2 -Wall -Wextra -Werror tests/test_rs97_hotpaths.cpp -o /tmp/test_rs97_hotpaths
           /tmp/test_rs97_hotpaths
+      - name: Verify production GPU Unai 4bpp sprite fast path (C++03)
+        run: |
+          g++ -std=c++03 -O2 -Wall -Wextra -Werror tests/test_rs97_sprite4bpp.cpp -o /tmp/test_rs97_sprite4bpp
+          /tmp/test_rs97_sprite4bpp
       - name: Check memory safety with ASan/UBSan
         run: |
           clang++ -std=c++11 -O1 -g -Wall -Wextra -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_rs97_render.cpp -o /tmp/test_rs97_render_san
           /tmp/test_rs97_render_san
           clang++ -std=c++03 -O1 -g -Wall -Wextra -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_rs97_hotpaths.cpp -o /tmp/test_rs97_hotpaths_san
           /tmp/test_rs97_hotpaths_san
+          clang++ -std=c++03 -O1 -g -Wall -Wextra -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_rs97_sprite4bpp.cpp -o /tmp/test_rs97_sprite4bpp_san
+          /tmp/test_rs97_sprite4bpp_san
 
 # This checks host-side pixel equivalence and memory bounds only.
 # It does not compile RetroFW firmware/OPK or test RS-97 hardware.

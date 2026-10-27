@@ -73,3 +73,27 @@ Before first use:
 routines. They cannot detect all compatibility problems or firmware issues.
 Full RetroFW cross-compilation and real RS-97 V3.0 testing remain necessary
 before claiming an FPS improvement or a fully validated OPK.
+
+## GPU Unai 4bpp CLUT sprite fast path (third pass)
+
+For ordinary sprites with 4-bit paletted textures, **no lighting, no blending
+and no destination mask checks or mask setting**, the GPU now attempts paired
+32-bit writes for two adjacent color pixels. It preserves zero-color
+transparency and the source palette's bit 15. This reduces texture byte
+loads and store overhead for common opaque sprite rows.
+
+The fast path is **conservative**: it is disabled when the destination is not
+32-bit aligned, UV starts on an odd nibble, the row is shorter than eight
+pixels, or the output overlaps the texture row or palette. In these cases,
+the exact original GPU Unai loop runs; render-to-texture and self-modifying
+CLUT behavior are intentionally excluded from the optimization.
+
+`tests/test_rs97_sprite4bpp.cpp` compares the production helper to the
+original per-pixel 4bpp indexing for 20,000 randomized spans and
+explicitly exercises both fallback and optimized cases, plus VRAM alias
+guards. The CI checks C++03 compilation and ASan/UBSan.
+
+In an isolated **x86 host-side** microbenchmark with aligned 4bpp
+textures, the packed routine ranged from roughly 1.3x to 1.6x throughput
+over the scalar reference. This does **not** imply any specific real-world
+FPS improvement on the MIPS32 RS-97. No OPK has been cross-compiled yet.

@@ -7,11 +7,14 @@ static u32 diff_rng = 0x39e07d5u;
 static u32 diff_random() { diff_rng ^= diff_rng << 13; diff_rng ^= diff_rng >> 17; diff_rng ^= diff_rng << 5; return diff_rng; }
 static int run_mips_differential_test()
 {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    puts("TEST entering MIPS differential harness");
     Config.Cpu = CPU_DYNAREC;
     Config.HLE = 0;
     if (psxInit() != 0) { puts("FAIL psxInit"); return 1; }
     // The original RetroFW platform permits execution from the JIT buffer.
     // Linux/QEMU needs that permission set explicitly in this test process.
+    puts("TEST psxInit completed");
     const uintptr_t page = (uintptr_t)recMem & ~(uintptr_t)4095;
     if (mprotect((void *)page, 0x401000, PROT_READ|PROT_WRITE|PROT_EXEC) != 0) {
         perror("mprotect JIT"); return 1;
@@ -21,6 +24,7 @@ static int run_mips_differential_test()
     psxRegs.writeok=1; psxRegs.io_cycle_counter=0x7fffffffu;
     const u32 start=0x80010000u, end=0x80012000u;
     for (unsigned trial=0; trial<200; ++trial) {
+        if (!trial) printf("TEST first trial psxM=%p recMem=%p\n", (void *)psxM, (void *)recMem);
         memset(psxM, 0, 0x200000);
         u32 *program=(u32 *)(psxM+0x10000);
         for (unsigned i=0; i<120; ++i) {
@@ -37,10 +41,14 @@ static int run_mips_differential_test()
         psxRegs.pc=start; psxRegs.cycle=0; psxRegs.interrupt=0;
         for (unsigned r=1; r<32; ++r) psxRegs.GPR.r[r]=diff_random();
         const psxRegisters initial=psxRegs;
+        if (!trial) puts("TEST interpreter start");
         psxCpu=&psxInt; psxInt.ExecuteBlock(end);
+        if (!trial) puts("TEST interpreter end");
         const psxRegisters expected=psxRegs;
         psxRegs=initial;
+        if (!trial) puts("TEST dynarec start");
         psxCpu=&psxRec; psxRec.Reset(); psxRec.ExecuteBlock(end);
+        if (!trial) puts("TEST dynarec end");
         for (unsigned r=0; r<34; ++r) if (psxRegs.GPR.r[r]!=expected.GPR.r[r]) {
             printf("FAIL trial %u GPR %u: interpreter=%08x dynarec=%08x\n",trial,r,expected.GPR.r[r],psxRegs.GPR.r[r]);
             return 1;

@@ -35,7 +35,7 @@ static int run_mips_differential_test()
         for (unsigned i=0; i<120; ++i) {
             const u32 d=1+diff_random()%25, s=1+diff_random()%25;
             const u32 offset=diff_random() & 0xff;
-            switch (diff_random()%7) {
+            switch (diff_random()%12) {
             case 0: {
                 const u32 t=1+diff_random()%25;
                 program[i]=(s<<21)|(t<<16)|(d<<11)|0x21; // ADDU
@@ -44,13 +44,26 @@ static int run_mips_differential_test()
             case 1: program[i]=(9u<<26)|(s<<21)|(d<<16)|(diff_random()&0xffff); break; // ADDIU
             case 2: program[i]=(0x2bu<<26)|(26u<<21)|(d<<16)|(offset&~3u); break; // SW
             case 3: program[i]=(0x28u<<26)|(26u<<21)|(d<<16)|offset; break; // SB
+            case 4: program[i]=(0x2au<<26)|(26u<<21)|(d<<16)|offset; break; // SWL
+            case 5: program[i]=(0x2eu<<26)|(26u<<21)|(d<<16)|offset; break; // SWR
+            case 6: {
+                const u32 t=1+diff_random()%25;
+                program[i]=(s<<21)|(t<<16)|0x19u; // MULTU
+                break;
+            }
+            case 7: {
+                const u32 cpreg=diff_random()%32;
+                program[i]=(0x12u<<26)|(4u<<21)|(d<<16)|(cpreg<<11); // MTC2
+                break;
+            }
             default: {
                 // An independent delay-slot instruction follows each load.
                 // Preserve room for it at the end of the block.
                 if (i == 119) { program[i]=0; break; }
-                const u32 op=(i%3 == 0) ? 0x23u : ((i%3 == 1) ? 0x20u : 0x21u);
+                const u32 loads[] = { 0x23u, 0x20u, 0x21u, 0x22u, 0x26u };
+                const u32 op=loads[diff_random()%5];
                 const u32 address_offset=op == 0x23u ? (offset&~3u) : (op == 0x21u ? (offset&~1u) : offset);
-                program[i]=(op<<26)|(26u<<21)|(d<<16)|address_offset; // LW/LB/LH
+                program[i]=(op<<26)|(26u<<21)|(d<<16)|address_offset; // LW/LB/LH/LWL/LWR
                 program[++i]=0;
                 break;
             }
@@ -88,6 +101,6 @@ static int run_mips_differential_test()
             printf("FAIL trial %u PC/CP state\n",trial); return 1;
         }
     }
-    puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/load/store blocks and jump delay slots");
+    puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/HI-LO/GTE/load-store blocks and jump delay slots");
     return 0;
 }

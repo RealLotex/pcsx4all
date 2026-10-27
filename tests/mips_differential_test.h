@@ -114,5 +114,37 @@ static int run_mips_differential_test()
         }
     }
     puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/HI-LO/GTE/load-store blocks and jump delay slots");
+    // Test a non-delay-slot SYSCALL against both the interpreter and the
+    // architectural exception code, EPC, and vector.
+    u32 *program=(u32 *)(psxM+0x10000);
+    program[0]=0x0000000cu; // SYSCALL
+    psxRegs.pc=start; psxRegs.cycle=0; psxRegs.CP0.n.Status=0; psxRegs.CP0.n.Cause=0;
+    const psxRegisters exception_start=psxRegs;
+    psxCpu=&psxInt; psxInt.ExecuteBlock(0x80000080u);
+    const psxRegisters exception_expected=psxRegs;
+    if (exception_expected.CP0.n.EPC!=start || (exception_expected.CP0.n.Cause & 0x7cu)!=0x20u) {
+        puts("FAIL interpreter SYSCALL architectural exception state"); return 1;
+    }
+    psxRegs=exception_start; psxCpu=&psxRec; psxRec.Reset();
+    psxRec.ExecuteBlock(0x80000080u);
+    if (psxRegs.pc!=exception_expected.pc ||
+        memcmp(&psxRegs.CP0,&exception_expected.CP0,sizeof(psxRegs.CP0)) ||
+        memcmp(&psxRegs.GPR,&exception_expected.GPR,sizeof(psxRegs.GPR))) {
+        puts("FAIL SYSCALL interpreter/dynarec state"); return 1;
+    }
+    puts("PASS SYSCALL exception vector, cause, EPC and CPU state");
+    // Invalidate the start of an already-compiled block through the normal
+    // PS1 memory write path, then verify the modified instruction executes.
+    program[0]=(9u<<26)|(1u<<21)|(1u<<16)|1u; // ADDIU r1,r1,1
+    program[1]=(2u<<26)|((end>>2)&0x03ffffffu);
+    program[2]=0;
+    psxCpu=&psxRec; psxRec.Reset(); psxRegs.pc=start; psxRegs.GPR.r[1]=3;
+    psxRec.ExecuteBlock(end);
+    if (psxRegs.GPR.r[1]!=4) { puts("FAIL initial code block"); return 1; }
+    psxMemWrite32(start, (9u<<26)|(1u<<21)|(1u<<16)|7u);
+    psxRegs.pc=start; psxRegs.GPR.r[1]=3;
+    psxRec.ExecuteBlock(end);
+    if (psxRegs.GPR.r[1]!=10) { puts("FAIL self-modifying block invalidation"); return 1; }
+    puts("PASS rewritten block is invalidated and recompiled");
     return 0;
 }

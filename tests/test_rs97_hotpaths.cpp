@@ -49,10 +49,10 @@ static int check_scanline(const uint16_t *vram, unsigned width,
                           bool rgb24, uint32_t offset)
 {
     // A stack buffer with a tail canary to detect overwritten scratch.
-    uint32_t scratch32[GPU_SCANLINE_SCRATCH_WORDS / 2 + 4];
-    for (unsigned k = 0; k < sizeof(scratch32) / sizeof(scratch32[0]); ++k)
-        scratch32[k] = 0xA55A239Eu;
-    uint16_t *scratch = (uint16_t *)scratch32;
+    uint16_t scratch[GPU_SCANLINE_SCRATCH_WORDS + 8]
+        __attribute__((aligned(4)));
+    for (unsigned k = 0; k < sizeof(scratch) / sizeof(scratch[0]); ++k)
+        scratch[k] = 0xA55Au;
     const uint32_t words = rgb24 ? (width * 3u + 1u) / 2u : width;
     const uint32_t bytes = rgb24 ? width * 3u : width * 2u;
     const uint16_t *result =
@@ -84,9 +84,9 @@ static int check_scanline(const uint16_t *vram, unsigned width,
         }
     }
 
-    const uint32_t *canary = scratch32 + GPU_SCANLINE_SCRATCH_WORDS / 2;
-    for (int j = 0; j < 4; ++j) {
-        if (canary[j] != 0xA55A239Eu) {
+    const uint16_t *canary = scratch + GPU_SCANLINE_SCRATCH_WORDS;
+    for (int j = 0; j < 8; ++j) {
+        if (canary[j] != 0xA55Au) {
             puts("FAIL scratch buffer overflow");
             return 1;
         }

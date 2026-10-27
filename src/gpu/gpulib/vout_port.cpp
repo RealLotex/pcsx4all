@@ -18,6 +18,7 @@
 
 #include "port.h"
 #include "gpu.h"
+#include "vram_scanline.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 // BLITTERS TAKEN FROM gpu_unai/gpu_blit.h
@@ -698,6 +699,9 @@ void vout_update(void)
 	bool isRGB24 = gpu.status.rgb24;
 	u16* dst16 = SCREEN;
 	u16* src16 = (u16*)gpu.vram;
+	// Aligned storage for rare scanlines crossing PS1 VRAM's 1 MiB end.
+	// GPU_Blit320 requires 32-bit alignment for packed source reads.
+	u32 wrapped_source[GPU_SCANLINE_SCRATCH_WORDS / 2];
 
 	// PS1 fb read wraps around (fixes black screen in 'Tobal no. 1')
 	unsigned int src16_offs_msk = 1024*512-1;
@@ -724,7 +728,7 @@ void vout_update(void)
 	{
 		case 256: {
 			for (int y1=y0+h1; y0<y1; y0+=incY) {
-				GPU_Blit256(src16 + src16_offs, dst16, isRGB24);
+				GPU_Blit256(gpuVramScanline(src16, src16_offs, w0, isRGB24, (u16*)wrapped_source), dst16, isRGB24);
 				dst16 += VIDEO_WIDTH;
 				src16_offs = (src16_offs + h0) & src16_offs_msk;
 			}
@@ -734,11 +738,11 @@ void vout_update(void)
 			for (int y1=y0+h1; y0<y1; y0+=incY) {//SLPS02124
 				if (use_clip_368 == false || isRGB24)
 				{
-				    GPU_Blit368(src16 + src16_offs, dst16, isRGB24/*, 0*/);
+				    GPU_Blit368(gpuVramScanline(src16, src16_offs, w0, isRGB24, (u16*)wrapped_source), dst16, isRGB24/*, 0*/);
 				}
 				else
 				{
-				    GPU_Blit368_clip(src16 + src16_offs, dst16);
+				    GPU_Blit368_clip(gpuVramScanline(src16, src16_offs, w0, isRGB24, (u16*)wrapped_source), dst16);
 				}
 				dst16 += VIDEO_WIDTH;
 				src16_offs = (src16_offs + h0) & src16_offs_msk;
@@ -749,7 +753,7 @@ void vout_update(void)
 			// Ensure 32-bit alignment for GPU_BlitWW() blitter:
 			src16_offs &= ~1;
 			for (int y1=y0+h1; y0<y1; y0+=incY) {
-				GPU_Blit320(src16 + src16_offs, dst16, isRGB24);
+				GPU_Blit320(gpuVramScanline(src16, src16_offs, w0, isRGB24, (u16*)wrapped_source), dst16, isRGB24);
 				dst16 += VIDEO_WIDTH;
 				src16_offs = (src16_offs + h0) & src16_offs_msk;
 			}
@@ -757,7 +761,7 @@ void vout_update(void)
 
 		case 384: {
 			for (int y1=y0+h1; y0<y1; y0+=incY) {
-				GPU_Blit384(src16 + src16_offs, dst16, isRGB24);
+				GPU_Blit384(gpuVramScanline(src16, src16_offs, w0, isRGB24, (u16*)wrapped_source), dst16, isRGB24);
 				dst16 += VIDEO_WIDTH;
 				src16_offs = (src16_offs + h0) & src16_offs_msk;
 			}
@@ -765,7 +769,7 @@ void vout_update(void)
 
 		case 512: {
 			for (int y1=y0+h1; y0<y1; y0+=incY) {
-				GPU_Blit512(src16 + src16_offs, dst16, isRGB24);
+				GPU_Blit512(gpuVramScanline(src16, src16_offs, w0, isRGB24, (u16*)wrapped_source), dst16, isRGB24);
 				dst16 += VIDEO_WIDTH;
 				src16_offs = (src16_offs + h0) & src16_offs_msk;
 			}
@@ -773,7 +777,7 @@ void vout_update(void)
 
 		case 640: {
 			for (int y1=y0+h1; y0<y1; y0+=incY) {
-				GPU_Blit640(src16 + src16_offs, dst16, isRGB24);
+				GPU_Blit640(gpuVramScanline(src16, src16_offs, w0, isRGB24, (u16*)wrapped_source), dst16, isRGB24);
 				dst16 += VIDEO_WIDTH;
 				src16_offs = (src16_offs + h0) & src16_offs_msk;
 			}

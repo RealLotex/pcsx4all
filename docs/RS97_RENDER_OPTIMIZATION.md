@@ -51,3 +51,25 @@ Before first use:
 4. The `RS-97 renderer regression tests` GitHub workflow runs host-side
    equality and sanitizer checks; it does not prove full MIPS binary
    compatibility or an FPS gain on the real device.
+
+## Compatibility / render hotpath improvements (second pass)
+
+- `src/gpu/gpulib/vram_scanline.h` is called by the 256/320/368/384/512/640
+  video blitters. Normally it returns a direct VRAM pointer with no copy.
+  If a 15-bit or 24-bit display scanline crosses the final VRAM address,
+  it copies only that rare scanline into a 32-bit-aligned scratch buffer.
+  This avoids out-of-bounds VRAM reads and handles the linear wrap.
+- `src/gpu/gpu_unai/gpu_opaque_fill.h` centralizes the already-used packed
+  opaque span fill. Flat-shaded **untextured, unblended, unmasked** polygons
+  now use that same faster path instead of a scalar write for every pixel.
+  Textured pixels, semitransparent polygons, dithering and mask checks
+  stay in the original rendering paths.
+- `tests/test_rs97_hotpaths.cpp` includes these **actual production headers**
+  and verifies 0..512-pixel fills (both alignments), all six output widths,
+  15/24-bit data, VRAM wrapping and guard words. C++03 builds and
+  AddressSanitizer/UndefinedBehaviorSanitizer checks run in GitHub Actions.
+
+**Limitations:** These tests protect only their exercised memory and color
+routines. They cannot detect all compatibility problems or firmware issues.
+Full RetroFW cross-compilation and real RS-97 V3.0 testing remain necessary
+before claiming an FPS improvement or a fully validated OPK.

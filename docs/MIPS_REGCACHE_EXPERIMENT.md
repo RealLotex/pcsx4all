@@ -18,19 +18,22 @@ The separate QEMU MIPS test build executes both the real interpreter and dynarec
 using the same initial CPU state and RAM. It tests 200 seeded blocks containing
 ADDU/ADDIU, MULTU, MTC2, aligned LW/LB/LH/SW/SB, unaligned LWL/LWR/SWL/SWR,
 selected MFC2/LWC2/SWC2 registers and a J delay slot, and compares GPR/HI/LO, PC, CP0, CP2 and 2 MiB RAM. It also
-checks a non-delay-slot SYSCALL against the expected exception vector, cause and
-EPC, and verifies that a C-side write invalidates the start of an already
-compiled block. Both allocator modes are tested with this branch's GTE correction.
-These cases do not cover special-effect GTE transfer registers, load-use hazards,
-exceptions in delay slots, arbitrary self-modifying code, all instruction values
-or real hardware.
+checks SYSCALL outside a delay slot and in the delay slot of a jump whose target
+is the exception vector, including cause, BD and EPC. It verifies that a C-side
+write invalidates the start of an already compiled block. The delay-slot test
+does not check the exception vector's priority over a different jump target. Both allocator modes are tested with this branch's GTE correction.
+These cases do not cover all special-effect GTE transfer registers, arbitrary
+self-modifying code, all instruction values or real hardware. An immediate LW/use
+case checks compatibility between the cores and exposes an existing accuracy gap:
+both see the newly loaded value instead of the previous value documented for the
+PS1 load delay (https://psx-spx.consoledev.net/dev/ps1/cpu/cpuspecifications/).
 
 The expanded test exposed an existing difference in MTC2 to IRGB: the interpreter
 writes only the low 16 bits of IR1–IR3, while the dynarec overwrote all 32 bits.
 The branch emits halfword stores, preserving the upper halves as the interpreter
 does. An interpreter comparison cannot establish correctness by itself: notably,
 the existing interpreter's ADD and ADDI do not raise the overflow exception
-mentioned in their comments.
+mentioned in their comments, and the dynarec emits ADDU/ADDIU for them.
 
 CI cross-builds the original release, the PR base, and the experimental variant
 with the official RetroFW 2.3 SDK. The linker warns about mixing abicalls and

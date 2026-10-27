@@ -168,6 +168,24 @@ static int run_mips_differential_test()
     }
     if (sh_found!=3) { printf("FAIL IRGB emitted %u expected 3 halfword stores\n",sh_found); return 1; }
     puts("PASS IRGB preservation and three emitted MIPS32 halfword stores");
+    // Compare the existing CPU cores on a load immediately followed by a
+    // use of its destination. Agreement alone is not an R3000A oracle.
+    gte_program[0]=(0x23u<<26)|(26u<<21)|(1u<<16); // LW r1,0(r26)
+    gte_program[1]=(9u<<26)|(1u<<21)|(2u<<16); // ADDIU r2,r1,0
+    gte_program[2]=(9u<<26)|(1u<<21)|(3u<<16); // ADDIU r3,r1,0
+    gte_program[3]=(2u<<26)|((end>>2)&0x03ffffffu);
+    gte_program[4]=0;
+    *(u32 *)(psxM+0x18000)=0x22222222u;
+    psxRegs.pc=start; psxRegs.GPR.r[1]=0x11111111u; psxRegs.GPR.r[26]=0x80018000u;
+    const psxRegisters hazard_start=psxRegs;
+    psxCpu=&psxInt; psxInt.ExecuteBlock(end);
+    const psxRegisters hazard_expected=psxRegs;
+    psxRegs=hazard_start; psxCpu=&psxRec; psxRec.Reset(); psxRec.ExecuteBlock(end);
+    if (memcmp(&psxRegs.GPR,&hazard_expected.GPR,sizeof(psxRegs.GPR))) {
+        printf("FAIL load-use compatibility: interpreter r2=%08x dynarec r2=%08x\n",
+               hazard_expected.GPR.r[2],psxRegs.GPR.r[2]); return 1;
+    }
+    printf("PASS load-use compatibility; following instruction saw %08x\n",psxRegs.GPR.r[2]);
     // Test a non-delay-slot SYSCALL against both the interpreter and the
     // architectural exception code, EPC, and vector.
     u32 *program=(u32 *)(psxM+0x10000);

@@ -37,6 +37,10 @@ struct PolyVertex {
 	};
 };
 
+#ifdef GPU_UNAI_LIT4_PALETTE_EXPERIMENT
+#include "gpu_lit4_palette.h"
+#endif
+
 enum PolyAttribute {
 	POLYATTR_TEXTURE = (1 << 0),
 	POLYATTR_GOURAUD = (1 << 1)
@@ -377,6 +381,15 @@ void gpuDrawPolyFT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_qua
 	PolyVertex vbuf[4];
 	polyInitVertexBuffer(vbuf, packet, POLYTYPE_FT, is_quad);
 
+	PP spanDriver = gpuPolySpanDriver;
+#ifdef GPU_UNAI_LIT4_PALETTE_EXPERIMENT
+	if (gpuPolySpanDriver == gpuPolySpanDrivers[0x21] &&
+	    gpuLit4PaletteDisjoint(gpu_unai)) {
+		gpuLit4Prepare(gpu_unai);
+		spanDriver = gpuLit4Span;
+	}
+#endif
+
 	int total_passes = is_quad ? 2 : 1;
 	int cur_pass = 0;
 	do
@@ -687,7 +700,7 @@ void gpuDrawPolyFT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_qua
 
 				if (xb > xmax) xb = xmax;
 				if ((xb - xa) > 0)
-					gpuPolySpanDriver(gpu_unai, PixelBase + xa, (xb - xa));
+					spanDriver(gpu_unai, PixelBase + xa, (xb - xa));
 			}
 		}
 	} while (++cur_pass < total_passes);

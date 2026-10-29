@@ -74,6 +74,15 @@ The median time fell by 13.5% in this QEMU experiment. Screenshots at output
 flips 500, 1000, 1500 and 2000 matched across all six runs; this does not
 check every output frame or all emulator state.
 
+In an additional scratch replay, checksums of the CPU GPR, CP0, GTE data and
+control registers plus PC, and the complete 1 MiB VRAM, matched at all four
+checkpoints between two baseline runs and one optimized run. The complete
+2 MiB PS1 RAM also matched at all four checkpoints between one baseline run
+and the optimized run. The other baseline replay differed by nine bytes of
+RAM at the final checkpoint. Independent baseline repeats had already
+shown a handful of varying RAM bytes even when CPU and VRAM matched. Their
+cause has not been determined, and this does not prove full equivalence.
+
 This is a controlled local indication for one HLE scene, not an RS-97
 measurement: QEMU, instrumentation, the stationary car, host scheduling and
 different MIPS code layout can affect the result. The scratch-only alignment

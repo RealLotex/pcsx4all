@@ -44,3 +44,26 @@ full VRAM, including palette overlap fallback. The CI workflow runs both with
 sanitizers on host and with the actual RetroFW compiler and QEMU. A full
 experimental RetroFW OPK is cross-built. Further workloads, full-game
 performance analysis, more hardware coverage and ABI review are still needed.
+
+## MIPS dynarec game replay under QEMU
+
+A separate scratch-only build was patched to decode an unaligned ISO directory
+field safely and to mark the JIT buffer executable under Linux/QEMU. With HLE,
+the default 2.0 cycle multiplier, frameskip off and the speed limiter disabled,
+it ran Gran Turismo through High Speed Ring using the real MIPS dynarec. The
+scratch baseline and candidate use the same code apart from the palette flag;
+both also include the IRGB correction from the separate dynarec experiment.
+
+For output frames 3000–4000 and 4000–5000, respectively, two baseline runs
+took 12.895/12.544 and 12.758/12.396 seconds; two candidate runs took
+12.531/12.495 and 12.674/12.741 seconds. The runs were alternated and the
+candidate was not instrumented for GPU statistics. Screenshots in one
+baseline and both candidate runs matched at frames 3000, 4000 and 5000. The
+other baseline run differed by about two in-game frames; automated inputs and
+frame numbers do not ensure an identical state. These small, variable
+differences do not demonstrate an overall improvement.
+
+Saving an automated scratch state succeeded, but subsequent loading stalled
+under this QEMU harness even when saving after the event queue had been
+processed. No state-based comparison is claimed. The alignment workaround,
+JIT permission change and test hooks are not included in the product branch.

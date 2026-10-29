@@ -63,7 +63,20 @@ other baseline run differed by about two in-game frames; automated inputs and
 frame numbers do not ensure an identical state. These small, variable
 differences do not demonstrate an overall improvement.
 
-Saving an automated scratch state succeeded, but subsequent loading stalled
-under this QEMU harness even when saving after the event queue had been
-processed. No state-based comparison is claimed. The alignment workaround,
-JIT permission change and test hooks are not included in the product branch.
+An initial automatic state stalled when loaded, so it was replaced by a
+scratch-only harness that saves after returning from nested HLE calls and
+finishing the event queue. Its loader also clears the root-counter flag that
+normally signals a load performed from inside the frontend menu. Starting
+from that same generated state, the next 500 output flips were a warm-up; the
+following 1,500 took 21.375, 21.484 and 22.066 seconds on the baseline and
+18.770, 18.582 and 18.547 seconds with the candidate. Runs were interleaved.
+The median time fell by 13.5% in this QEMU experiment. Screenshots at output
+flips 500, 1000, 1500 and 2000 matched across all six runs; this does not
+check every output frame or all emulator state.
+
+This is a controlled local indication for one HLE scene, not an RS-97
+measurement: QEMU, instrumentation, the stationary car, host scheduling and
+different MIPS code layout can affect the result. The scratch-only alignment
+workaround, executable JIT permission, HLE-depth tracking, state-load fix
+and input/screenshot hooks are not included in the product branch. Hardware
+FPS and compatibility remain unverified.

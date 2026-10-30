@@ -1,0 +1,55 @@
+name: RS-97 flat-lit palette experiment
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [experiment-lit4-palette]
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare spans and complete polygons
+        run: |
+          for flags in '-O2 -Wall -Wextra -Werror' '-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer'; do
+            g++ -std=c++03 $flags -isystem src/gpu/gpu_unai tests/test_rs97_lit4_palette.cpp -o /tmp/test-lit4
+            /tmp/test-lit4
+            g++ -std=c++03 $flags -isystem src/gpu/gpu_unai -DLIT4_REFERENCE -c tests/test_rs97_lit4_polygon_driver.cpp -o /tmp/lit-ref.o
+            g++ -std=c++03 $flags -isystem src/gpu/gpu_unai -c tests/test_rs97_lit4_polygon_driver.cpp -o /tmp/lit-opt.o
+            g++ -std=c++03 $flags tests/test_rs97_lit4_polygon.cpp /tmp/lit-ref.o /tmp/lit-opt.o -o /tmp/test-lit-poly
+            /tmp/test-lit-poly
+          done
+  mips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install official RetroFW SDK and QEMU
+        run: |
+          curl --fail --location --retry 3 -o /tmp/retrofw-sdk.tar.gz https://github.com/retrofw/retrofw.github.io/releases/download/v2.3/mipsel-RetroFW-linux-uclibc_sdk-buildroot.tar.gz
+          echo '8ceda398f9f4ba6d64c3c48c8699c0d6b2617090ca3a56db1a547ad7d5e0b80a  /tmp/retrofw-sdk.tar.gz' | sha256sum -c -
+          sudo mkdir -p /opt/retrofw-sdk
+          sudo chown "$USER" /opt/retrofw-sdk
+          tar -xzf /tmp/retrofw-sdk.tar.gz -C /opt/retrofw-sdk --strip-components=1
+          /opt/retrofw-sdk/relocate-sdk.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y squashfs-tools qemu-user
+      - name: Compare production renderer paths in MIPS emulation
+        run: |
+          cxx=/opt/retrofw-sdk/bin/mipsel-linux-g++
+          flags='-std=c++03 -O2 -mips32 -mno-abicalls -fno-PIC -Wall -Wextra -Werror'
+          sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
+          $cxx $flags -isystem src/gpu/gpu_unai tests/test_rs97_lit4_palette.cpp -o /tmp/test-lit4
+          qemu-mipsel -L "$sysroot" /tmp/test-lit4
+          $cxx $flags -isystem src/gpu/gpu_unai -DLIT4_REFERENCE -c tests/test_rs97_lit4_polygon_driver.cpp -o /tmp/lit-ref.o
+          $cxx $flags -isystem src/gpu/gpu_unai -c tests/test_rs97_lit4_polygon_driver.cpp -o /tmp/lit-opt.o
+          $cxx $flags tests/test_rs97_lit4_polygon.cpp /tmp/lit-ref.o /tmp/lit-opt.o -o /tmp/test-lit-poly
+          qemu-mipsel -L "$sysroot" /tmp/test-lit-poly
+      - name: Cross-build experimental RetroFW OPK
+        run: |
+          sed -i '/^C_ARCH =/a C_ARCH += -DGPU_UNAI_LIT4_PALETTE_EXPERIMENT' Makefile
+          make maketree CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          make -j2 opk CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          /opt/retrofw-sdk/bin/mipsel-linux-readelf -h pcsx4all/pcsx4all.dge

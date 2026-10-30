@@ -24,6 +24,8 @@ CXX = $(CROSS_COMPILE)g++
 STRIP = $(CROSS_COMPILE)strip
 
 RECOMPILER = mips
+# Exact signed-32 GTE accumulator overflow test; set to 0 for comparison.
+GTE_SIGNED32_BOUNDS ?= 1
 
 RM     = rm -f
 MD     = mkdir
@@ -58,6 +60,9 @@ CFLAGS += -D$(shell echo $(SPU) | tr a-z A-Z)
 CFLAGS += -DFORCE_MEMCPY32
 ifeq ($(INTERNAL_RESOLUTION)$(USE_GPULIB),11)
 CFLAGS += -DGPU_UNAI_LOWRES_EXPERIMENT
+endif
+ifeq ($(GTE_SIGNED32_BOUNDS),1)
+CFLAGS += -DGTE_SIGNED32_BOUNDS_EXPERIMENT
 endif
 
 ifdef RECOMPILER

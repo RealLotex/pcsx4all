@@ -1510,6 +1510,58 @@ static char *pixel_skip_show()
 	sprintf(buf, "%s", gpu_unai_config_ext.pixel_skip == true ? "on" : "off");
 	return buf;
 }
+
+static int texture_size_alter(u32 keys)
+{
+	if ((keys & KEY_RIGHT) && gpu_unai_config_ext.texture_size < 3) ++gpu_unai_config_ext.texture_size;
+	else if ((keys & KEY_LEFT) && gpu_unai_config_ext.texture_size > 0) --gpu_unai_config_ext.texture_size;
+	return 0;
+}
+
+static char *texture_size_show()
+{
+	static char *names[] = { (char *)"original", (char *)"half", (char *)"quarter", (char *)"plain" };
+	return names[gpu_unai_config_ext.texture_size];
+}
+
+static int gradient_quality_alter(u32 keys)
+{
+	if ((keys & KEY_RIGHT) && gpu_unai_config_ext.gradient_quality < 3) ++gpu_unai_config_ext.gradient_quality;
+	else if ((keys & KEY_LEFT) && gpu_unai_config_ext.gradient_quality > 0) --gpu_unai_config_ext.gradient_quality;
+	return 0;
+}
+
+static char *gradient_quality_show()
+{
+	static char *names[] = { (char *)"original", (char *)"half", (char *)"quarter", (char *)"flat" };
+	return names[gpu_unai_config_ext.gradient_quality];
+}
+
+static int vertex_grid_alter(u32 keys)
+{
+	if ((keys & KEY_RIGHT) && gpu_unai_config_ext.vertex_grid < 3) ++gpu_unai_config_ext.vertex_grid;
+	else if ((keys & KEY_LEFT) && gpu_unai_config_ext.vertex_grid > 0) --gpu_unai_config_ext.vertex_grid;
+	return 0;
+}
+
+static char *vertex_grid_show()
+{
+	static char *names[] = { (char *)"original", (char *)"2px", (char *)"4px", (char *)"8px" };
+	return names[gpu_unai_config_ext.vertex_grid];
+}
+
+static int small_polygons_alter(u32 keys)
+{
+	if ((keys & KEY_RIGHT) && gpu_unai_config_ext.small_polygons < 3) ++gpu_unai_config_ext.small_polygons;
+	else if ((keys & KEY_LEFT) && gpu_unai_config_ext.small_polygons > 0) --gpu_unai_config_ext.small_polygons;
+	return 0;
+}
+
+static char *small_polygons_show()
+{
+	static char *names[] = { (char *)"keep", (char *)"<4px", (char *)"<8px", (char *)"<16px" };
+	return names[gpu_unai_config_ext.small_polygons];
+}
 #endif
 
 static int gpu_settings_defaults()
@@ -1528,6 +1580,10 @@ static int gpu_settings_defaults()
 	gpu_unai_config_ext.fast_lighting = 1;
 	gpu_unai_config_ext.blending = 1;
 	gpu_unai_config_ext.dithering = 0;
+	gpu_unai_config_ext.texture_size = 0;
+	gpu_unai_config_ext.gradient_quality = 0;
+	gpu_unai_config_ext.vertex_grid = 0;
+	gpu_unai_config_ext.small_polygons = 0;
 #endif
 
 	return 0;
@@ -1548,6 +1604,10 @@ static MENUITEM gui_GPUSettingsItems[] = {
 	{(char *)"Fast lighting        ", NULL, &fast_lighting_alter, &fast_lighting_show, NULL},
 	{(char *)"Blending             ", NULL, &blending_alter, &blending_show, NULL},
 	{(char *)"Pixel skip           ", NULL, &pixel_skip_alter, &pixel_skip_show, NULL},
+	{(char *)"Texture size         ", NULL, &texture_size_alter, &texture_size_show, NULL},
+	{(char *)"Gradient quality     ", NULL, &gradient_quality_alter, &gradient_quality_show, NULL},
+	{(char *)"Vertex grid          ", NULL, &vertex_grid_alter, &vertex_grid_show, NULL},
+	{(char *)"Small polygons       ", NULL, &small_polygons_alter, &small_polygons_show, NULL},
 #endif
 	{(char *)"Restore defaults     ", &gpu_settings_defaults, NULL, NULL, NULL},
 	{0}

@@ -282,8 +282,9 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
             driver_idx |= Lighting;
         }
 
-        PP driver = gpuPolySpanDrivers[driver_idx];
-        gpuDrawPolyFT(packet, driver, false);
+        bool protected_polygon;
+        PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,false,false,&protected_polygon);
+        gpuDrawPolyFT(packet, driver, false, protected_polygon);
       } break;
 
       case 0x28:
@@ -318,8 +319,9 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
             driver_idx |= Lighting;
         }
 
-        PP driver = gpuPolySpanDrivers[driver_idx];
-        gpuDrawPolyFT(packet, driver, true); // is_quad = true
+        bool protected_polygon;
+        PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,true,false,&protected_polygon);
+        gpuDrawPolyFT(packet, driver, true, protected_polygon); // is_quad = true
       } break;
 
       case 0x30:
@@ -330,13 +332,14 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // this is an untextured poly, so CF_LIGHT (texture blend)
         // shouldn't apply. Until the original array of template
         // instantiation ptrs is fixed, we're stuck with this. (TODO)
-        PP driver = gpuPolySpanDrivers[
+        bool protected_polygon;
+        PP driver = gpuChooseGradientPolygonDriver(
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode |
           gpu_unai.Masking | Blending | 129 | gpu_unai.PixelMSB
-        ];
-        gpuDrawPolyG(packet, driver, false);
+        ,packet,false,&protected_polygon);
+        gpuDrawPolyG(packet, driver, false, protected_polygon);
       } break;
 
       case 0x34:
@@ -345,13 +348,14 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x37: {          // Gouraud-shaded, textured 3-pt poly
         gpuSetCLUT    (gpu_unai.PacketBuffer.U4[2] >> 16);
         gpuSetTexture (gpu_unai.PacketBuffer.U4[5] >> 16);
-        PP driver = gpuPolySpanDrivers[
+        bool protected_polygon;
+        PP driver = gpuChooseTexturePolygonDriver(
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode | gpu_unai.TEXT_MODE |
           gpu_unai.Masking | Blending | ((Lighting)?129:0) | gpu_unai.PixelMSB
-        ];
-        gpuDrawPolyGT(packet, driver, false);
+        ,packet,false,true,&protected_polygon);
+        gpuDrawPolyGT(packet, driver, false, protected_polygon);
       } break;
 
       case 0x38:
@@ -359,13 +363,14 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x3A:
       case 0x3B: {          // Gouraud-shaded 4-pt poly
         // See notes regarding '129' for 0x30..0x33 further above -senquack
-        PP driver = gpuPolySpanDrivers[
+        bool protected_polygon;
+        PP driver = gpuChooseGradientPolygonDriver(
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode |
           gpu_unai.Masking | Blending | 129 | gpu_unai.PixelMSB
-        ];
-        gpuDrawPolyG(packet, driver, true); // is_quad = true
+        ,packet,true,&protected_polygon);
+        gpuDrawPolyG(packet, driver, true, protected_polygon); // is_quad = true
       } break;
 
       case 0x3C:
@@ -374,13 +379,14 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x3F: {          // Gouraud-shaded, textured 4-pt poly
         gpuSetCLUT    (gpu_unai.PacketBuffer.U4[2] >> 16);
         gpuSetTexture (gpu_unai.PacketBuffer.U4[5] >> 16);
-        PP driver = gpuPolySpanDrivers[
+        bool protected_polygon;
+        PP driver = gpuChooseTexturePolygonDriver(
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode | gpu_unai.TEXT_MODE |
           gpu_unai.Masking | Blending | ((Lighting)?129:0) | gpu_unai.PixelMSB
-        ];
-        gpuDrawPolyGT(packet, driver, true); // is_quad = true
+        ,packet,true,true,&protected_polygon);
+        gpuDrawPolyGT(packet, driver, true, protected_polygon); // is_quad = true
       } break;
 
       case 0x40:

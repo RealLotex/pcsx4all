@@ -206,8 +206,9 @@ void gpuSendPacketFunction(const int PRIM)
 						driver_idx |= Lighting;
 				}
 
-				PP driver = gpuPolySpanDrivers[driver_idx];
-				gpuDrawPolyFT(packet, driver, false);
+				bool protected_polygon;
+				PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,false,false,&protected_polygon);
+				gpuDrawPolyFT(packet, driver, false, protected_polygon);
 				gpu_unai.fb_dirty = true;
 				DO_LOG(("gpuDrawPolyFT(0x%x)\n",PRIM));
 			}
@@ -254,8 +255,9 @@ void gpuSendPacketFunction(const int PRIM)
 						driver_idx |= Lighting;
 				}
 
-				PP driver = gpuPolySpanDrivers[driver_idx];
-				gpuDrawPolyFT(packet, driver, true); // is_quad = true
+				bool protected_polygon;
+				PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,true,false,&protected_polygon);
+				gpuDrawPolyFT(packet, driver, true, protected_polygon); // is_quad = true
 				gpu_unai.fb_dirty = true;
 				DO_LOG(("gpuDrawPolyFT(0x%x) (4-pt QUAD)\n",PRIM));
 			}
@@ -272,13 +274,14 @@ void gpuSendPacketFunction(const int PRIM)
 				// this is an untextured poly, so CF_LIGHT (texture blend)
 				// shouldn't apply. Until the original array of template
 				// instantiation ptrs is fixed, we're stuck with this. (TODO)
-				PP driver = gpuPolySpanDrivers[
+				bool protected_polygon;
+				PP driver = gpuChooseGradientPolygonDriver(
 					(gpu_unai.blit_mask?1024:0) |
 					Dithering |
 					Blending_Mode |
 					gpu_unai.Masking | Blending | 129 | gpu_unai.PixelMSB
-				];
-				gpuDrawPolyG(packet, driver, false);
+				,packet,false,&protected_polygon);
+				gpuDrawPolyG(packet, driver, false, protected_polygon);
 				gpu_unai.fb_dirty = true;
 				DO_LOG(("gpuDrawPolyG(0x%x)\n",PRIM));
 			}
@@ -293,13 +296,14 @@ void gpuSendPacketFunction(const int PRIM)
 				NULL_GPU();
 				gpuSetCLUT    (gpu_unai.PacketBuffer.U4[2] >> 16);
 				gpuSetTexture (gpu_unai.PacketBuffer.U4[5] >> 16);
-				PP driver = gpuPolySpanDrivers[
+				bool protected_polygon;
+				PP driver = gpuChooseTexturePolygonDriver(
 					(gpu_unai.blit_mask?1024:0) |
 					Dithering |
 					Blending_Mode | gpu_unai.TEXT_MODE |
 					gpu_unai.Masking | Blending | ((Lighting)?129:0) | gpu_unai.PixelMSB
-				];
-				gpuDrawPolyGT(packet, driver, false);
+				,packet,false,true,&protected_polygon);
+				gpuDrawPolyGT(packet, driver, false, protected_polygon);
 				gpu_unai.fb_dirty = true;
 				DO_LOG(("gpuDrawPolyGT(0x%x)\n",PRIM));
 			}
@@ -313,13 +317,14 @@ void gpuSendPacketFunction(const int PRIM)
 			{
 				NULL_GPU();
 				// See notes regarding '129' for 0x30..0x33 further above -senquack
-				PP driver = gpuPolySpanDrivers[
+				bool protected_polygon;
+				PP driver = gpuChooseGradientPolygonDriver(
 					(gpu_unai.blit_mask?1024:0) |
 					Dithering |
 					Blending_Mode |
 					gpu_unai.Masking | Blending | 129 | gpu_unai.PixelMSB
-				];
-				gpuDrawPolyG(packet, driver, true); // is_quad = true
+				,packet,true,&protected_polygon);
+				gpuDrawPolyG(packet, driver, true, protected_polygon); // is_quad = true
 				gpu_unai.fb_dirty = true;
 				DO_LOG(("gpuDrawPolyG(0x%x) (4-pt QUAD)\n",PRIM));
 			}
@@ -334,13 +339,14 @@ void gpuSendPacketFunction(const int PRIM)
 				NULL_GPU();
 				gpuSetCLUT    (gpu_unai.PacketBuffer.U4[2] >> 16);
 				gpuSetTexture (gpu_unai.PacketBuffer.U4[5] >> 16);
-				PP driver = gpuPolySpanDrivers[
+				bool protected_polygon;
+				PP driver = gpuChooseTexturePolygonDriver(
 					(gpu_unai.blit_mask?1024:0) |
 					Dithering |
 					Blending_Mode | gpu_unai.TEXT_MODE |
 					gpu_unai.Masking | Blending | ((Lighting)?129:0) | gpu_unai.PixelMSB
-				];
-				gpuDrawPolyGT(packet, driver, true); // is_quad = true
+				,packet,true,true,&protected_polygon);
+				gpuDrawPolyGT(packet, driver, true, protected_polygon); // is_quad = true
 				gpu_unai.fb_dirty = true;
 				DO_LOG(("gpuDrawPolyGT(0x%x) (4-pt QUAD)\n",PRIM));
 			}

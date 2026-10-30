@@ -1,0 +1,47 @@
+name: RS-97 exact GTE accumulator bounds
+on:
+  pull_request:
+    branches: [master, experiment-potato-textures]
+  push:
+    branches: [experiment-gte-bounds, experiment-internal-resolution]
+permissions:
+  contents: read
+jobs:
+  host-gte:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check production helper, sanitizers and complete GTE states
+        run: bash tests/run_gte_bounds_tests.sh
+  retrofw-gte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install official RetroFW SDK and QEMU
+        run: |
+          curl --fail --location --retry 3 -o /tmp/retrofw-sdk.tar.gz https://github.com/retrofw/retrofw.github.io/releases/download/v2.3/mipsel-RetroFW-linux-uclibc_sdk-buildroot.tar.gz
+          echo '8ceda398f9f4ba6d64c3c48c8699c0d6b2617090ca3a56db1a547ad7d5e0b80a  /tmp/retrofw-sdk.tar.gz' | sha256sum -c -
+          sudo mkdir -p /opt/retrofw-sdk
+          sudo chown "$USER" /opt/retrofw-sdk
+          tar -xzf /tmp/retrofw-sdk.tar.gz -C /opt/retrofw-sdk --strip-components=1
+          /opt/retrofw-sdk/relocate-sdk.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y squashfs-tools qemu-user
+      - name: Check original and optimized helpers on actual MIPS code
+        run: CXX_MIPS=/opt/retrofw-sdk/bin/mipsel-linux-g++ bash tests/run_gte_bounds_tests.sh
+      - name: Cross-build reference and optimized RetroFW OPKs
+        run: |
+          for mode in 0 1; do
+            make clean CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+            make maketree CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+            make -j2 opk GTE_SIGNED32_BOUNDS="$mode" INTERNAL_RESOLUTION=1 CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+            cp pcsx4all/pcsx4all.opk "/tmp/gte-bounds-$mode.opk"
+            /opt/retrofw-sdk/bin/mipsel-linux-readelf -h pcsx4all/pcsx4all.dge
+            sha256sum "/tmp/gte-bounds-$mode.opk"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gte-bounds-retrofw-comparison
+          path: /tmp/gte-bounds-*.opk
+          retention-days: 14

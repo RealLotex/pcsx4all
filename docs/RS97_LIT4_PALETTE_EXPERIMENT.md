@@ -89,3 +89,22 @@ different MIPS code layout can affect the result. The scratch-only alignment
 workaround, executable JIT permission, HLE-depth tracking, state-load fix
 and input/screenshot hooks are not included in the product branch. Hardware
 FPS and compatibility remain unverified.
+
+## Second MIPS/QEMU replay: Digimon World
+
+An automated local input sequence reached an in-engine interior dialogue scene
+in Digimon World NTSC SLUS01032. A scratch state was generated there and loaded
+for six interleaved runs using the same HLE, dynarec, frameskip and limiter
+settings as the Gran Turismo replay. After 500 output flips of warm-up, the
+following 1,500 took 16.013, 15.794 and 15.773 seconds for the baseline, and
+14.585, 14.599 and 14.126 seconds for the candidate. The median time fell 7.6%
+under QEMU. The camera and dialogue were stationary, not a complete playthrough.
+
+In a separate instrumented run of the same scene and interval, the optimized
+driver processed 18,144,000 pixels in 6,000 polygons. Instrumentation changes
+execution cost and was not included in the timing runs. Screenshots at flips
+500, 1000, 1500 and 2000 matched across the six timed runs. A separate baseline
+and candidate replay produced matching checksums for CPU GPR/CP0/GTE/PC,
+all 2 MiB PS1 RAM and all 1 MiB VRAM at those four points. These checks do not
+cover every frame, hidden state or other game scenes. QEMU is not the console,
+so the measurements do not establish RS-97 FPS or full compatibility.

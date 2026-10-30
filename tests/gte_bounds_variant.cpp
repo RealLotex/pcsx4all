@@ -1,4 +1,5 @@
 // Compile the actual production implementation under alternate names.
+#define DIVIDE bounds_DIVIDE
 #define gtecalcMFC2 bounds_gtecalcMFC2
 #define gtecalcMTC2 bounds_gtecalcMTC2
 #define gtecalcCTC2 bounds_gtecalcCTC2

@@ -427,6 +427,9 @@ static void rec_set_options()
 
 static void recRecompile()
 {
+#ifdef MIPSREC_PROFILE
+	++mipsrec_profile.blocks;
+#endif
 	// Notify plugin_lib that we're recompiling (affects frameskip timing)
 	pl_dynarec_notify();
 
@@ -520,6 +523,9 @@ static void recRecompile()
 
 static int recInit()
 {
+#ifdef MIPSREC_PROFILE
+	memset(&mipsrec_profile, 0, sizeof(mipsrec_profile));
+#endif
 	REC_LOG("Initializing\n");
 
 	recMem = (u32*)recMemBase;
@@ -590,8 +596,22 @@ static int recInit()
 }
 
 
+#ifdef MIPSREC_PROFILE
+void recProfileDump()
+{
+	REC_LOG("profile: blocks=%u clear_calls=%u clear_nonempty=%u "
+	        "pressure_passes=%u evicted_mappings=%u dirty_evictions=%u\n",
+	        mipsrec_profile.blocks, mipsrec_profile.clear_calls,
+	        mipsrec_profile.clear_nonempty, mipsrec_profile.pressure_passes,
+	        mipsrec_profile.evicted_mappings, mipsrec_profile.dirty_evictions);
+}
+#endif
+
 static void recShutdown()
 {
+#ifdef MIPSREC_PROFILE
+	recProfileDump();
+#endif
 	REC_LOG("Shutting down\n");
 
 	if (psx_mem_mapped)
@@ -1656,6 +1676,9 @@ static void recExecute()
 /* Invalidate 'Size' code block pointers at word-aligned PS1 address 'Addr'. */
 static void recClear(u32 Addr, u32 Size)
 {
+#ifdef MIPSREC_PROFILE
+	++mipsrec_profile.clear_calls;
+#endif
 	const u32 masked_ram_addr = Addr & 0x1ffffc;
 
 	// Check if the page(s) of PS1 RAM that 'Addr','Size' target contain the
@@ -1675,6 +1698,9 @@ static void recClear(u32 Addr, u32 Size)
 	uptr dst_base = !rec_mem_mapped ? (uptr)recRAM : (uptr)PC_REC_MMAP(Addr & ~0x1fffff);
 
 	if (has_code) {
+#ifdef MIPSREC_PROFILE
+		++mipsrec_profile.clear_nonempty;
+#endif
 		void *dst = (void*)(dst_base + (masked_ram_addr * REC_RAM_PTR_SIZE/4));
 		memset(dst, 0, Size*REC_RAM_PTR_SIZE);
 	}

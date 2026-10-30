@@ -1,0 +1,23 @@
+name: MIPS register cache experiment
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [experiment-regcache-single-spill]
+permissions:
+  contents: read
+jobs:
+  allocator-model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise baseline and experimental allocator
+        run: |
+          for mode in baseline experimental; do
+            flag=""
+            if [ "$mode" = experimental ]; then flag=-DMIPSREC_SINGLE_SPILL; fi
+            g++ -std=c++03 -O2 -Wall -Wextra -Werror -Wno-unused-function $flag tests/test_mips_regcache_model.cpp -o /tmp/regcache-$mode
+            /tmp/regcache-$mode
+            clang++ -std=c++03 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wno-unused-function $flag tests/test_mips_regcache_model.cpp -o /tmp/regcache-$mode-san
+            /tmp/regcache-$mode-san
+          done

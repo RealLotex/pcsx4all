@@ -4,6 +4,25 @@ This is an opt-in experiment: build with
 `GPU_UNAI_LIT4_PALETTE_EXPERIMENT` to enable it. Normal builds retain the
 existing renderer. Do not infer RS-97 FPS from the measurements below.
 
+**Update: same-executable comparison.** Earlier timings in this document
+compared separate binaries. Different code layout and host scheduling can
+affect QEMU, so their 13.5% and 7.6% median differences cannot be attributed
+solely to the palette optimization. A later comparison selected baseline
+and optimized paths at runtime within the same scratch-only MIPS executable.
+For 1,500 output flips after 500 warm-up flips, two Gran Turismo baseline runs
+used 17.92 and 17.93 CPU seconds, versus 17.36 and 17.36 with the original
+palette experiment: about 3.2% less CPU time in QEMU. Digimon baseline used
+14.46 and 14.38 seconds versus 14.37 and 14.45 with the experiment, which
+does not demonstrate a measurable difference. All 24 screenshots at four
+checkpoints across six runs per game matched. Two samples and one scene per
+game remain insufficient to establish a hardware FPS result.
+
+The same executable also tested a variant that avoided palette preparation for
+triangles with twice-area below 128. Its CPU times were 17.33/17.39 seconds
+for Gran Turismo and 14.62/14.45 for Digimon. This did not establish a gain
+over the existing experiment and was discarded. The runtime selector and
+the threshold variant were scratch-only and are not included in this PR.
+
 The production span driver for an opaque, flat-lit, 4bpp polygon performs
 three lighting-table lookups per nontransparent texel. The experiment lights
 the 16 palette entries once per polygon and preserves transparency and source

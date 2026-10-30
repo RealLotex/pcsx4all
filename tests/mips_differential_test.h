@@ -142,6 +142,38 @@ static int run_mips_differential_test()
     }
     puts("PASS real interpreter vs MIPS dynarec: 200 randomized ALU/HI-LO/GTE and CPU/GTE load-store blocks and jump delay slots");
     printf("Generated MIPS instructions for randomized blocks: %lu\n", generated_words);
+    // Exercise matrix/vector variants seen in games, both as ordinary
+    // instructions and in a jump delay slot. The last three parameters also
+    // cover different matrix/vector selections and overflow/saturation flags.
+    const u32 mvmva_params[] = {0x018,0x0b8,0x218,0x078,0x278,0x3f9};
+    u32 *mvmva_program=(u32 *)(psxM+0x10000);
+    for (unsigned trial=0; trial<600; ++trial) {
+        const u32 op=mvmva_params[trial%6] | (diff_random() & 6u);
+        const u32 instruction=(0x12u<<26)|(0x10u<<21)|(op<<10)|0x12u;
+        const u32 jump=(2u<<26)|((end>>2)&0x03ffffffu);
+        const bool delay=((trial/6u)&1u)!=0;
+        mvmva_program[0]=delay ? jump : instruction;
+        mvmva_program[1]=delay ? instruction : jump;
+        mvmva_program[2]=0;
+        psxRegs.pc=start; psxRegs.cycle=0; psxRegs.interrupt=0;
+        for (unsigned i=0; i<32; ++i) {
+            psxRegs.CP2D.r[i]=diff_random();
+            psxRegs.CP2C.r[i]=diff_random();
+        }
+        const psxRegisters mvmva_start=psxRegs;
+        psxCpu=&psxInt; psxInt.ExecuteBlock(end);
+        const psxRegisters mvmva_expected=psxRegs;
+        psxRegs=mvmva_start; psxCpu=&psxRec; psxRec.Reset(); psxRec.ExecuteBlock(end);
+        if (psxRegs.pc!=mvmva_expected.pc ||
+            memcmp(&psxRegs.GPR,&mvmva_expected.GPR,sizeof(psxRegs.GPR)) ||
+            memcmp(&psxRegs.CP0,&mvmva_expected.CP0,sizeof(psxRegs.CP0)) ||
+            memcmp(&psxRegs.CP2D,&mvmva_expected.CP2D,sizeof(psxRegs.CP2D)) ||
+            memcmp(&psxRegs.CP2C,&mvmva_expected.CP2C,sizeof(psxRegs.CP2C))) {
+            printf("FAIL MVMVA trial=%u opcode=%08x delay=%d\n",trial,instruction,(int)delay);
+            return 1;
+        }
+    }
+    puts("PASS MVMVA interpreter/dynarec including jump delay slots");
     // IRGB updates the low halves of IR1-IR3 and must retain the upper
     // halves. Also check that the JIT really emitted MIPS32 SH instructions.
     u32 *gte_program=(u32 *)(psxM+0x10000);

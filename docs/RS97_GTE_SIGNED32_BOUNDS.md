@@ -20,5 +20,8 @@ The disposable replay executable contains original and optimized helpers; the JI
 | --- | --- | --- | --- |
 | Gran Turismo, stationary car on High Speed Ring | 17.42 / 17.19 / 17.19 | 16.16 / 16.29 / 16.29 | 5.2% less CPU time |
 | Digimon World, interior/dialogue | 14.33 / 14.50 / 14.31 | 13.75 / 13.71 / 13.83 | 4.0% less CPU time |
+| Silent Hill v1.1, initial foggy street | 14.61 / 14.63 / 14.56 | 14.07 / 14.42 / 14.14 | 3.2% less CPU time |
 
 All 24 captured checkpoints per game match exactly across variants and repetitions. These are QEMU CPU-time measurements on the development PC; they do not measure RS-97 FPS or establish compatibility with other games/scenes. The user's previous no-FPS-gain result concerned earlier optimizations and quality controls, not this new change. Hardware FPS remains unmeasured.
+
+The Silent Hill state was created locally by starting a new game on Normal and reaching the first outdoor street. It uses the same replay executable and measurement settings; startup video and menus are outside the timed interval. Neither copyrighted game/state data nor the QEMU test hooks are included in the repository or production OPK.

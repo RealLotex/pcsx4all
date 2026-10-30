@@ -4,6 +4,10 @@
 
 On 2026-10-30, the user tested the delivered RetroFW OPK and reported that the new controls work but provide no FPS improvement. The report did not include a per-setting numerical breakdown. Keep the controls experimental and disabled by default; they are not a demonstrated performance improvement.
 
+The user also reported that the controls barely affect static objects in Gran Turismo and Silent Hill. The renderer has no static/dynamic-object classification: its eligibility guards exclude many primitives regardless of motion. In particular, any transparent or mask-bit color anywhere in an indexed palette excludes that whole palette, even if the polygon never samples that entry.
+
+Actual internal-resolution scaling was requested but is not implemented in this branch. Vertex-grid snapping is not a substitute for it. The quality-reduction scope and the performance objective remain incomplete.
+
 The tested file was `pcsx4all-quality-experimental.opk`, SHA-256 `3439c9b7aae0d961822bf4fe8581e7397924053876ac751b76a15165ece5dada`. Earlier QEMU timings used different revisions and safeguards and must not be presented as gains on this device or as measurements of this exact delivered build.
 
 ## Controls

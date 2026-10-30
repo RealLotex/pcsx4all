@@ -1,7 +1,7 @@
 name: RS-97 optional 3D quality controls
 on:
   pull_request:
-    branches: [master]
+    branches: [master, experiment-potato-textures]
   push:
     branches: [experiment-potato-textures, experiment-internal-resolution]
 permissions:

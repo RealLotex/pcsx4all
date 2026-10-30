@@ -1537,6 +1537,21 @@ static char *gradient_quality_show()
 	return names[gpu_unai_config_ext.gradient_quality];
 }
 
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+static int internal_resolution_alter(u32 keys)
+{
+	if ((keys & KEY_RIGHT) && gpu_unai_config_ext.internal_resolution < 3) ++gpu_unai_config_ext.internal_resolution;
+	else if ((keys & KEY_LEFT) && gpu_unai_config_ext.internal_resolution > 0) --gpu_unai_config_ext.internal_resolution;
+	return 0;
+}
+
+static char *internal_resolution_show()
+{
+	static char *names[] = { (char *)"original", (char *)"half", (char *)"quarter", (char *)"eighth" };
+	return names[gpu_unai_config_ext.internal_resolution];
+}
+#endif
+
 static int vertex_grid_alter(u32 keys)
 {
 	if ((keys & KEY_RIGHT) && gpu_unai_config_ext.vertex_grid < 3) ++gpu_unai_config_ext.vertex_grid;
@@ -1584,6 +1599,7 @@ static int gpu_settings_defaults()
 	gpu_unai_config_ext.gradient_quality = 0;
 	gpu_unai_config_ext.vertex_grid = 0;
 	gpu_unai_config_ext.small_polygons = 0;
+	gpu_unai_config_ext.internal_resolution = 0;
 #endif
 
 	return 0;
@@ -1604,6 +1620,9 @@ static MENUITEM gui_GPUSettingsItems[] = {
 	{(char *)"Fast lighting        ", NULL, &fast_lighting_alter, &fast_lighting_show, NULL},
 	{(char *)"Blending             ", NULL, &blending_alter, &blending_show, NULL},
 	{(char *)"Pixel skip           ", NULL, &pixel_skip_alter, &pixel_skip_show, NULL},
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+	{(char *)"Internal resolution  ", NULL, &internal_resolution_alter, &internal_resolution_show, NULL},
+#endif
 	{(char *)"Texture size         ", NULL, &texture_size_alter, &texture_size_show, NULL},
 	{(char *)"Gradient quality     ", NULL, &gradient_quality_alter, &gradient_quality_show, NULL},
 	{(char *)"Vertex grid          ", NULL, &vertex_grid_alter, &vertex_grid_show, NULL},

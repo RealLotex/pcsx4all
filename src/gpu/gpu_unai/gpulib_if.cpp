@@ -55,6 +55,11 @@
 
 int renderer_init(void)
 {
+#ifdef GPU_LOWRES_TEST_ENV
+  const char *raster_shift=getenv("PCSX4ALL_RASTER_SHIFT");
+  const int shift=raster_shift ? atoi(raster_shift) : 0;
+  gpu_unai_config_ext.internal_resolution=(shift>=0 && shift<=3) ? shift : 0;
+#endif
   memset((void*)&gpu_unai, 0, sizeof(gpu_unai));
   gpu_unai.vram = (u16*)gpu.vram;
 
@@ -283,6 +288,9 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         }
 
         bool protected_polygon;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        if (gpuTryLowResPolygon(packet,driver_idx,false,POLYTYPE_FT,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
         PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,false,false,&protected_polygon);
         gpuDrawPolyFT(packet, driver, false, protected_polygon);
       } break;
@@ -320,6 +328,9 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         }
 
         bool protected_polygon;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        if (gpuTryLowResPolygon(packet,driver_idx,true,POLYTYPE_FT,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
         PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,true,false,&protected_polygon);
         gpuDrawPolyFT(packet, driver, true, protected_polygon); // is_quad = true
       } break;
@@ -333,12 +344,16 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // shouldn't apply. Until the original array of template
         // instantiation ptrs is fixed, we're stuck with this. (TODO)
         bool protected_polygon;
-        PP driver = gpuChooseGradientPolygonDriver(
+        const u32 driver_idx=
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode |
           gpu_unai.Masking | Blending | 129 | gpu_unai.PixelMSB
-        ,packet,false,&protected_polygon);
+        ;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        if (gpuTryLowResPolygon(packet,driver_idx,false,POLYTYPE_G,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        PP driver = gpuChooseGradientPolygonDriver(driver_idx,packet,false,&protected_polygon);
         gpuDrawPolyG(packet, driver, false, protected_polygon);
       } break;
 
@@ -349,12 +364,16 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         gpuSetCLUT    (gpu_unai.PacketBuffer.U4[2] >> 16);
         gpuSetTexture (gpu_unai.PacketBuffer.U4[5] >> 16);
         bool protected_polygon;
-        PP driver = gpuChooseTexturePolygonDriver(
+        const u32 driver_idx=
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode | gpu_unai.TEXT_MODE |
           gpu_unai.Masking | Blending | ((Lighting)?129:0) | gpu_unai.PixelMSB
-        ,packet,false,true,&protected_polygon);
+        ;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        if (gpuTryLowResPolygon(packet,driver_idx,false,POLYTYPE_GT,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,false,true,&protected_polygon);
         gpuDrawPolyGT(packet, driver, false, protected_polygon);
       } break;
 
@@ -364,12 +383,16 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x3B: {          // Gouraud-shaded 4-pt poly
         // See notes regarding '129' for 0x30..0x33 further above -senquack
         bool protected_polygon;
-        PP driver = gpuChooseGradientPolygonDriver(
+        const u32 driver_idx=
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode |
           gpu_unai.Masking | Blending | 129 | gpu_unai.PixelMSB
-        ,packet,true,&protected_polygon);
+        ;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        if (gpuTryLowResPolygon(packet,driver_idx,true,POLYTYPE_G,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        PP driver = gpuChooseGradientPolygonDriver(driver_idx,packet,true,&protected_polygon);
         gpuDrawPolyG(packet, driver, true, protected_polygon); // is_quad = true
       } break;
 
@@ -380,12 +403,16 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         gpuSetCLUT    (gpu_unai.PacketBuffer.U4[2] >> 16);
         gpuSetTexture (gpu_unai.PacketBuffer.U4[5] >> 16);
         bool protected_polygon;
-        PP driver = gpuChooseTexturePolygonDriver(
+        const u32 driver_idx=
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode | gpu_unai.TEXT_MODE |
           gpu_unai.Masking | Blending | ((Lighting)?129:0) | gpu_unai.PixelMSB
-        ,packet,true,true,&protected_polygon);
+        ;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        if (gpuTryLowResPolygon(packet,driver_idx,true,POLYTYPE_GT,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,true,true,&protected_polygon);
         gpuDrawPolyGT(packet, driver, true, protected_polygon); // is_quad = true
       } break;
 

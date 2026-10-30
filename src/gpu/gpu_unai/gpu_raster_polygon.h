@@ -27,6 +27,9 @@
 
 struct PolyVertex {
 	s32 x, y; // Sign-extended 11-bit X,Y coords
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+	s32 native_x, native_y;
+#endif
 	union {
 		struct { u8 u, v, pad[2]; } tex; // Texture coords (if used)
 		u32 tex_word;
@@ -75,6 +78,13 @@ static void polyInitVertexBuffer(PolyVertex *vbuf, const PtrUnion packet, PolyTy
 		s16* coord_ptr = (s16*)ptr;
 		vbuf[i].x = GPU_EXPANDSIGN(coord_ptr[0]) + x_off;
 		vbuf[i].y = GPU_EXPANDSIGN(coord_ptr[1]) + y_off;
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+		vbuf[i].native_x=vbuf[i].x; vbuf[i].native_y=vbuf[i].y;
+		if (gpu_lowres.shift) {
+			vbuf[i].x >>= gpu_lowres.shift;
+			vbuf[i].y >>= gpu_lowres.shift;
+		}
+#endif
 	}
 	if (texturing && gpu_unai_config_ext.vertex_grid &&
 	    !(protected_polygon<0 ? gpuTextureLooksLike2D(packet,is_quad!=0,gouraud) : protected_polygon!=0)) {
@@ -175,6 +185,18 @@ static bool polyUseTriangle(const PolyVertex *vbuf, int tri_num, const PolyVerte
 {
 	// Using verts 0,1,2 or is this the 2nd pass of a quad (verts 1,2,3)?
 	const PolyVertex *tri_ptr = &vbuf[(tri_num == 0) ? 0 : 1];
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+	if (gpu_lowres.shift) {
+		s32 xmin=tri_ptr[0].native_x,xmax=xmin,ymin=tri_ptr[0].native_y,ymax=ymin;
+		for (unsigned i=1;i<3;++i) {
+			if (tri_ptr[i].native_x<xmin) xmin=tri_ptr[i].native_x;
+			if (tri_ptr[i].native_x>xmax) xmax=tri_ptr[i].native_x;
+			if (tri_ptr[i].native_y<ymin) ymin=tri_ptr[i].native_y;
+			if (tri_ptr[i].native_y>ymax) ymax=tri_ptr[i].native_y;
+		}
+		if (xmax-xmin>=CHKMAX_X || ymax-ymin>=CHKMAX_Y) return false;
+	}
+#endif
 
 	// Get indices of highest/lowest X,Y coords within triangle
 	int idx_lowest_x  = vertIdxOfLeastXCoord3(tri_ptr);
@@ -1477,3 +1499,7 @@ void gpuDrawPolyGT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_qua
 		}
 	} while (++cur_pass < total_passes);
 }
+
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+#include "gpu_lowres_dispatch.h"
+#endif

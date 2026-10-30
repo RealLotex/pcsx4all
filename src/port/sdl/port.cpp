@@ -329,6 +329,8 @@ void config_load()
 		} else if (!strcmp(line, "interlace")) {
 			sscanf(arg, "%d", &value);
 			gpu_unai_config_ext.ilace_force = value;
+		} else if (!strcmp(line, "internal_resolution")) {
+			gpu_unai_config_ext.internal_resolution = (sscanf(arg, "%d", &value)==1 && value >= 0 && value <= 3) ? value : 0;
 		} else if (!strcmp(line, "texture_size")) {
 			gpu_unai_config_ext.texture_size = (sscanf(arg, "%d", &value)==1 && value >= 0 && value <= 3) ? value : 0;
 		} else if (!strcmp(line, "gradient_quality")) {
@@ -406,6 +408,7 @@ void config_save()
 		   "fast_lighting %d\n"
 		   "blending %d\n"
 		   "dithering %d\n"
+		   "internal_resolution %d\n"
 		   "texture_size %d\n"
 		   "gradient_quality %d\n"
 		   "vertex_grid %d\n"
@@ -416,6 +419,7 @@ void config_save()
 		   gpu_unai_config_ext.fast_lighting,
 		   gpu_unai_config_ext.blending,
 		   gpu_unai_config_ext.dithering,
+		   gpu_unai_config_ext.internal_resolution,
 		   gpu_unai_config_ext.texture_size,
 		   gpu_unai_config_ext.gradient_quality,
 		   gpu_unai_config_ext.vertex_grid,
@@ -827,6 +831,7 @@ int main (int argc, char **argv)
 	gpu_unai_config_ext.gradient_quality = 0;
 	gpu_unai_config_ext.vertex_grid = 0;
 	gpu_unai_config_ext.small_polygons = 0;
+	gpu_unai_config_ext.internal_resolution = 0;
 #endif
 
 	// Load config from file.

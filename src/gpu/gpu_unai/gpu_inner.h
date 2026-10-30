@@ -725,6 +725,9 @@ const PP gpuPolySpanDrivers[2048] = {
 
 #include "gpu_texture_quality.h"
 #include "gpu_gradient_quality.h"
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+#include "gpu_lowres.h"
+#endif
 
 #undef TI
 #undef TN

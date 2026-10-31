@@ -9,6 +9,7 @@
 
 ## Escena completa y presentación — actualización 2026-10-31
 
+- Las pruebas intérprete/dynarec de PR #4 se extraen a un gate independiente de la política experimental de registros. Incluye 50 casos IRGB (MTC2 dinámico/constante/cero y LWC2, también en delay slot), 200 bloques aleatorios con comparación de RAM/CPU/GTE, 600 MVMVA y regresiones de excepciones/invalidez. Detalles y límites: [MIPS_CORE_EQUIVALENCE.md](MIPS_CORE_EQUIVALENCE.md). La única corrección productiva es emitir tres SH sobre los campos IR de 16 bits, conservando las mitades altas internas igual que el intérprete. No se presenta como mejora de FPS.
 - Seguimiento: las copias GP0(80) sin ancho/alto o con origen/destino en la misma posición no consumen VRAM en `gpuMoveImage`. La barrera de escena completa ahora omite la expansión/invalidez para esos casos. Las copias efectivas conservan la barrera anterior; no cambiar sus casos de solapamiento o vuelta de VRAM.
 - El presentador directo de superficies pequeñas también agrupa colores repetidos, además de filas. Los tests del presentador cubren 12.096 casos (9.216 nativos y 2.880 de superficie), y la integración compara pantalla y VRAM final con la barrera anterior, incluidos feedback y uploads. Estos cambios no acreditan FPS en la consola.
 - La [PR #11](https://github.com/RealLotex/pcsx4all/pull/11) reúne los controles gráficos, el renderizado de toda la escena y la presentación agrupada. No contiene los prototipos descartados del asignador de registros, divisiones ni Gouraud uniforme. El código CPU/GTE de master se conserva.

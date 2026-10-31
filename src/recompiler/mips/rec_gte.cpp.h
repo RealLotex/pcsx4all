@@ -238,22 +238,23 @@ static void emitMTC2(u32 rt, u32 reg)
 		break;
 
 	case 28:
+		// Match gtecalcMTC2's 16-bit IR fields; retain their upper halves.
 		SW(rt, PERM_REG_1, off(CP2D.r[reg]));
 
 		ANDI(TEMP_1, rt, 0x1f);
 		SLL(TEMP_1, TEMP_1, 7);
 		// gteIR1 = ((value      ) & 0x1f) << 7;
-		SW(TEMP_1, PERM_REG_1, off(CP2D.r[9]));
+		SH(TEMP_1, PERM_REG_1, off(CP2D.p[9].sw.l));
 
 		ANDI(TEMP_1, rt, 0x1f << 5);
 		SLL(TEMP_1, TEMP_1, 2);
 		// gteIR2 = ((value >>  5) & 0x1f) << 7;
-		SW(TEMP_1, PERM_REG_1, off(CP2D.r[10]));
+		SH(TEMP_1, PERM_REG_1, off(CP2D.p[10].sw.l));
 
 		ANDI(TEMP_1, rt, 0x1f << 10);
 		SRL(TEMP_1, TEMP_1, 3);
 		// gteIR3 = ((value >> 10) & 0x1f) << 7;
-		SW(TEMP_1, PERM_REG_1, off(CP2D.r[11]));
+		SH(TEMP_1, PERM_REG_1, off(CP2D.p[11].sw.l));
 		break;
 
 	case 30:

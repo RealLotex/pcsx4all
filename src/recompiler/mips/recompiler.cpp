@@ -200,6 +200,12 @@ static inline bool IsFuzzyScratchpadAddr(const u32 reg)  { return iRegs[reg].is_
 #define RECMEM_SIZE         0x400000 //(12 * 1024 * 1024)
 #define RECMEM_SIZE_MAX     (RECMEM_SIZE-(512*1024))
 static u8 recMemBase[RECMEM_SIZE] __attribute__((aligned(4)));
+#ifdef MIPSREC_DIFFERENTIAL_TEST
+// Test-only bounds for granting execution permission to the JIT array under
+// Linux/QEMU. Normal RetroFW startup and memory permissions are unchanged.
+void *mipsRecTestCodeBase() { return recMemBase; }
+size_t mipsRecTestCodeSize() { return sizeof recMemBase; }
+#endif
 
 u32        *recMem;                /* Where does next emitted opcode in block go? */
 static u32 *recMemStart;           /* Where did first emitted opcode in block go? */

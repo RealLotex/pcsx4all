@@ -1,0 +1,67 @@
+name: MIPS interpreter and dynarec equivalence
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master, test-mips-core-equivalence]
+permissions:
+  contents: read
+jobs:
+  mips-cores:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        gte_bounds: [0, 1]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned official RetroFW SDK and QEMU
+        run: |
+          curl --fail --location --retry 3 -o /tmp/retrofw-sdk.tar.gz https://github.com/retrofw/retrofw.github.io/releases/download/v2.3/mipsel-RetroFW-linux-uclibc_sdk-buildroot.tar.gz
+          echo '8ceda398f9f4ba6d64c3c48c8699c0d6b2617090ca3a56db1a547ad7d5e0b80a  /tmp/retrofw-sdk.tar.gz' | sha256sum -c -
+          sudo mkdir -p /opt/retrofw-sdk
+          sudo chown "$USER" /opt/retrofw-sdk
+          tar -xzf /tmp/retrofw-sdk.tar.gz -C /opt/retrofw-sdk --strip-components=1
+          /opt/retrofw-sdk/relocate-sdk.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y qemu-user squashfs-tools
+      - name: Build and execute actual interpreter and MIPS JIT
+        run: |
+          make maketree CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          make -j2 all DYNAREC_TEST=1 GTE_SIGNED32_BOUNDS=${{ matrix.gte_bounds }} CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
+          timeout 120s qemu-mipsel -L "$sysroot" pcsx4all/pcsx4all.dge
+      - name: Confirm IRGB regression fails with the previous emitter
+        run: |
+          cp src/recompiler/mips/rec_gte.cpp.h /tmp/rec-gte-fixed.h
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('src/recompiler/mips/rec_gte.cpp.h')
+          s=p.read_text()
+          for i in (9,10,11):
+              old=f'SH(TEMP_1, PERM_REG_1, off(CP2D.p[{i}].sw.l));'
+              assert s.count(old)==1,old
+              s=s.replace(old,f'SW(TEMP_1, PERM_REG_1, off(CP2D.r[{i}]));')
+          p.write_text(s)
+          PY
+          make -j2 all DYNAREC_TEST=1 GTE_SIGNED32_BOUNDS=${{ matrix.gte_bounds }} CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
+          set +e
+          timeout 120s qemu-mipsel -L "$sysroot" pcsx4all/pcsx4all.dge > /tmp/old-emitter.log 2>&1
+          result=$?
+          set -e
+          cat /tmp/old-emitter.log
+          test "$result" -eq 1
+          python3 -c "from pathlib import Path; assert 'FAIL dynarec IRGB fields' in Path('/tmp/old-emitter.log').read_text()"
+          cp /tmp/rec-gte-fixed.h src/recompiler/mips/rec_gte.cpp.h
+      - name: Build normal OPK without synthetic startup
+        run: |
+          make clean CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          make maketree CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          make -j2 opk DYNAREC_TEST=0 INTERNAL_RESOLUTION=1 FULL_SCENE=1 GTE_SIGNED32_BOUNDS=${{ matrix.gte_bounds }} CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('pcsx4all/pcsx4all.dge').read_bytes()
+          assert b'TEST entering MIPS differential harness' not in p
+          assert b'PASS IRGB:' not in p
+          PY

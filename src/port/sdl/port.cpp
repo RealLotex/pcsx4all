@@ -693,8 +693,15 @@ with mingw build. */
 #undef main
 #endif
 
+#ifdef MIPSREC_DIFFERENTIAL_TEST
+#include "../../../tests/mips_differential_test.h"
+#endif
+
 int main (int argc, char **argv)
 {
+#ifdef MIPSREC_DIFFERENTIAL_TEST
+	return run_mips_differential_test();
+#endif
 	char filename[256];
 	const char *cdrfilename = GetIsoFile();
 

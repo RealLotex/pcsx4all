@@ -19,6 +19,9 @@
 #include "port.h"
 #include "gpu.h"
 #include "vram_scanline.h"
+#ifdef GPU_UNAI_FULL_SCENE
+#include "scene_scanout.h"
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // BLITTERS TAKEN FROM gpu_unai/gpu_blit.h
@@ -723,6 +726,78 @@ void vout_update(void)
 
 	int incY = (h0 == 480) ? 2 : 1;
 	h0 = ((h0 == 480) ? 2048 : 1024);
+
+#ifdef GPU_UNAI_FULL_SCENE
+	const unsigned scene_shift=gpu_unai_config_ext.internal_resolution;
+	u16 scene_clip[4];unsigned surface_shift=0;
+	if (isRGB24) renderer_flush_queues();
+	const u16 *surface=renderer_scene_surface(scene_clip,&surface_shift);
+	if (scene_shift) {
+		bool scanout_fast=true;
+#ifdef GPU_SCENE_SCANOUT_TEST_ENV
+		static int scanout_mode=-1;
+		if (scanout_mode<0) scanout_mode=getenv("PCSX4ALL_FAST_SCANOUT")?atoi(getenv("PCSX4ALL_FAST_SCANOUT")):0;
+		scanout_fast=scanout_mode!=0;
+#endif
+		if (h1<=0) {video_flip();return;}
+		if (!surface && scanout_fast) {
+			const unsigned rows=(h1+incY-1)/incY;
+#ifdef USE_BGR15
+			if (isRGB24) gpuSceneNativeScanout<true,true>(src16,src16_offs,w0,rows,h0,scene_shift,dst16);
+			else gpuSceneNativeScanout<false,true>(src16,src16_offs,w0,rows,h0,scene_shift,dst16);
+#else
+			if (isRGB24) gpuSceneNativeScanout<true,false>(src16,src16_offs,w0,rows,h0,scene_shift,dst16);
+			else gpuSceneNativeScanout<false,false>(src16,src16_offs,w0,rows,h0,scene_shift,dst16);
+#endif
+			video_flip();return;
+		}
+		// Includes uploaded backgrounds, text and RGB24 movies. This scanout
+		// does not change texture memory or claim to reduce movie decoding.
+		unsigned sample_x[320];
+		for (unsigned x=0;x<320;++x) sample_x[x]=x*(unsigned)w0/320u;
+		const unsigned first_y=src16_offs>>10, first_x=src16_offs&1023u;
+		if (surface && !isRGB24 && first_x>=scene_clip[0] && first_x+w0<=scene_clip[2] &&
+		    first_y>=scene_clip[1] && first_y+(unsigned)h1<=scene_clip[3]) {
+			for (unsigned x=0;x<320;++x) sample_x[x]=(first_x+sample_x[x])>>surface_shift;
+			unsigned previous_row=~0u;
+			for (int y1=y0+h1;y0<y1;y0+=incY) {
+				const unsigned row_index=(src16_offs>>10)>>surface_shift;
+				if (row_index==previous_row) memcpy(dst16,dst16-VIDEO_WIDTH,640);
+				else {
+					const u16 *row=surface+row_index*1024u;
+					for (unsigned x=0;x<320;++x) {
+#ifndef USE_BGR15
+						dst16[x]=RGB16(row[sample_x[x]]);
+#else
+						dst16[x]=row[sample_x[x]];
+#endif
+					}
+				}
+				previous_row=row_index;dst16+=VIDEO_WIDTH;
+				src16_offs=(src16_offs+h0)&src16_offs_msk;
+			}
+			video_flip();return;
+		}
+		for (int y1=y0+h1;y0<y1;y0+=incY) {
+			const unsigned sy=src16_offs>>10;
+			for (unsigned x=0;x<320;++x) {
+				const unsigned sx=(src16_offs&1023u)+sample_x[x];
+				const bool in_surface=surface && !isRGB24 && sx>=scene_clip[0] &&
+				  sx<scene_clip[2] && sy>=scene_clip[1] && sy<scene_clip[3];
+				const u16 c=in_surface ? surface[(sy>>surface_shift)*1024u+(sx>>surface_shift)] :
+				  gpuSceneDisplayPixel(src16,src16_offs,sample_x[x],isRGB24,scene_shift);
+#ifndef USE_BGR15
+				dst16[x]=RGB16(c);
+#else
+				dst16[x]=c;
+#endif
+			}
+			dst16+=VIDEO_WIDTH;
+			src16_offs=(src16_offs+h0)&src16_offs_msk;
+		}
+		video_flip();return;
+	}
+#endif
 
 	switch ( w0 )
 	{

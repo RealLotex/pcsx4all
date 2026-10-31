@@ -75,6 +75,14 @@ void gpuDrawLineF(PtrUnion packet, const PSD gpuPixelSpanDriver)
 	y0 = GPU_EXPANDSIGN(packet.S2[3]) + gpu_unai.DrawingOffset[1];
 	x1 = GPU_EXPANDSIGN(packet.S2[4]) + gpu_unai.DrawingOffset[0];
 	y1 = GPU_EXPANDSIGN(packet.S2[5]) + gpu_unai.DrawingOffset[1];
+#ifdef GPU_UNAI_FULL_SCENE
+    if (gpu_lowres.shift) {
+        const int ndx=x1-x0, ndy=y1-y0;
+        if (ndx>=CHKMAX_X || ndx<=-CHKMAX_X || ndy>=CHKMAX_Y || ndy<=-CHKMAX_Y) return;
+        x0>>=gpu_lowres.shift;y0>>=gpu_lowres.shift;
+        x1>>=gpu_lowres.shift;y1>>=gpu_lowres.shift;
+    }
+#endif
 
 	// Always draw top to bottom, so ensure y0 <= y1
 	if (y0 > y1) {
@@ -322,6 +330,14 @@ void gpuDrawLineG(PtrUnion packet, const PSD gpuPixelSpanDriver)
 	y0 = GPU_EXPANDSIGN(packet.S2[3]) + gpu_unai.DrawingOffset[1];
 	x1 = GPU_EXPANDSIGN(packet.S2[6]) + gpu_unai.DrawingOffset[0];
 	y1 = GPU_EXPANDSIGN(packet.S2[7]) + gpu_unai.DrawingOffset[1];
+#ifdef GPU_UNAI_FULL_SCENE
+    if (gpu_lowres.shift) {
+        const int ndx=x1-x0, ndy=y1-y0;
+        if (ndx>=CHKMAX_X || ndx<=-CHKMAX_X || ndy>=CHKMAX_Y || ndy<=-CHKMAX_Y) return;
+        x0>>=gpu_lowres.shift;y0>>=gpu_lowres.shift;
+        x1>>=gpu_lowres.shift;y1>>=gpu_lowres.shift;
+    }
+#endif
 
 	u32 col0 = packet.U4[0];
 	u32 col1 = packet.U4[2];

@@ -137,6 +137,14 @@ void gpuDrawT(PtrUnion packet, const PT gpuTileSpanDriver)
 	u32 h = packet.U2[5] & 0x1ff; // Max height is 511
 	x1 = x0 + w;
 	y1 = y0 + h;
+#ifdef GPU_UNAI_FULL_SCENE
+    if (gpu_lowres.shift) {
+        if (!w || !h) return;
+        const unsigned shift=gpu_lowres.shift, bias=(1u<<shift)-1u;
+        x0>>=shift;y0>>=shift;
+        x1=(x1+(int)bias)>>shift;y1=(y1+(int)bias)>>shift;
+    }
+#endif
 
 	s32 xmin, xmax, ymin, ymax;
 	xmin = gpu_unai.DrawingArea[0];	xmax = gpu_unai.DrawingArea[2];

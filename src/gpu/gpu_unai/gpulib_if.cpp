@@ -35,6 +35,9 @@
 
 // Inner loop driver instantiation file
 #include "gpu_inner.h"
+#ifdef GPU_UNAI_FULL_SCENE
+#include "gpu_scene.h"
+#endif
 
 // GPU internal image drawing functions
 #include "gpu_raster_image.h"
@@ -50,11 +53,22 @@
 
 // GPU command buffer execution/store
 #include "gpu_command.h"
+#ifdef GPU_UNAI_FULL_SCENE
+#include "gpu_scene_dispatch.h"
+#endif
 
 /////////////////////////////////////////////////////////////////////////////
 
 int renderer_init(void)
 {
+#ifdef GPU_LOWRES_TEST_ENV
+  const char *raster_shift=getenv("PCSX4ALL_RASTER_SHIFT");
+  const int shift=raster_shift ? atoi(raster_shift) : 0;
+  gpu_unai_config_ext.internal_resolution=(shift>=0 && shift<=3) ? shift : 0;
+#endif
+#ifdef GPU_UNAI_FULL_SCENE
+  gpuSceneInvalidate();
+#endif
   memset((void*)&gpu_unai, 0, sizeof(gpu_unai));
   gpu_unai.vram = (u16*)gpu.vram;
 
@@ -101,6 +115,9 @@ int renderer_init(void)
 
 void renderer_finish(void)
 {
+#ifdef GPU_UNAI_FULL_SCENE
+  gpuSceneFlush();free(gpu_scene.target);memset(&gpu_scene,0,sizeof gpu_scene);
+#endif
 }
 
 void renderer_notify_res_change(void)
@@ -247,6 +264,10 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
     switch (cmd)
     {
       case 0x02:
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuSceneClear(packet)) break;
+        gpuSceneFlush();gpuSceneInvalidate();
+        #endif
         gpuClearImage(packet);
         break;
 
@@ -254,11 +275,12 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x21:
       case 0x22:
       case 0x23: {          // Monochrome 3-pt poly
-        PP driver = gpuPolySpanDrivers[
-          (gpu_unai.blit_mask?1024:0) |
-          Blending_Mode |
-          gpu_unai.Masking | Blending | gpu_unai.PixelMSB
-        ];
+        const unsigned flags=(gpu_unai.blit_mask?1024:0) | Blending_Mode |
+          gpu_unai.Masking | Blending | gpu_unai.PixelMSB;
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuScenePolygon(packet,flags,false,POLYTYPE_F)) break;
+        #endif
+        PP driver=gpuPolySpanDrivers[flags];
         gpuDrawPolyF(packet, driver, false);
       } break;
 
@@ -282,19 +304,28 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
             driver_idx |= Lighting;
         }
 
-        PP driver = gpuPolySpanDrivers[driver_idx];
-        gpuDrawPolyFT(packet, driver, false);
+        bool protected_polygon;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuScenePolygon(packet,driver_idx,false,POLYTYPE_FT)) break;
+        #else
+        if (gpuTryLowResPolygon(packet,driver_idx,false,POLYTYPE_FT,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        #endif
+        PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,false,false,&protected_polygon);
+        gpuDrawPolyFT(packet, driver, false, protected_polygon);
       } break;
 
       case 0x28:
       case 0x29:
       case 0x2A:
       case 0x2B: {          // Monochrome 4-pt poly
-        PP driver = gpuPolySpanDrivers[
-          (gpu_unai.blit_mask?1024:0) |
-          Blending_Mode |
-          gpu_unai.Masking | Blending | gpu_unai.PixelMSB
-        ];
+        const unsigned flags=(gpu_unai.blit_mask?1024:0) | Blending_Mode |
+          gpu_unai.Masking | Blending | gpu_unai.PixelMSB;
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuScenePolygon(packet,flags,true,POLYTYPE_F)) break;
+        #endif
+        PP driver=gpuPolySpanDrivers[flags];
         gpuDrawPolyF(packet, driver, true); // is_quad = true
       } break;
 
@@ -318,8 +349,16 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
             driver_idx |= Lighting;
         }
 
-        PP driver = gpuPolySpanDrivers[driver_idx];
-        gpuDrawPolyFT(packet, driver, true); // is_quad = true
+        bool protected_polygon;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuScenePolygon(packet,driver_idx,true,POLYTYPE_FT)) break;
+        #else
+        if (gpuTryLowResPolygon(packet,driver_idx,true,POLYTYPE_FT,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        #endif
+        PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,true,false,&protected_polygon);
+        gpuDrawPolyFT(packet, driver, true, protected_polygon); // is_quad = true
       } break;
 
       case 0x30:
@@ -330,13 +369,22 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // this is an untextured poly, so CF_LIGHT (texture blend)
         // shouldn't apply. Until the original array of template
         // instantiation ptrs is fixed, we're stuck with this. (TODO)
-        PP driver = gpuPolySpanDrivers[
+        bool protected_polygon;
+        const u32 driver_idx=
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode |
           gpu_unai.Masking | Blending | 129 | gpu_unai.PixelMSB
-        ];
-        gpuDrawPolyG(packet, driver, false);
+        ;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuScenePolygon(packet,driver_idx,false,POLYTYPE_G)) break;
+        #else
+        if (gpuTryLowResPolygon(packet,driver_idx,false,POLYTYPE_G,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        #endif
+        PP driver = gpuChooseGradientPolygonDriver(driver_idx,packet,false,&protected_polygon);
+        gpuDrawPolyG(packet, driver, false, protected_polygon);
       } break;
 
       case 0x34:
@@ -345,13 +393,22 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x37: {          // Gouraud-shaded, textured 3-pt poly
         gpuSetCLUT    (gpu_unai.PacketBuffer.U4[2] >> 16);
         gpuSetTexture (gpu_unai.PacketBuffer.U4[5] >> 16);
-        PP driver = gpuPolySpanDrivers[
+        bool protected_polygon;
+        const u32 driver_idx=
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode | gpu_unai.TEXT_MODE |
           gpu_unai.Masking | Blending | ((Lighting)?129:0) | gpu_unai.PixelMSB
-        ];
-        gpuDrawPolyGT(packet, driver, false);
+        ;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuScenePolygon(packet,driver_idx,false,POLYTYPE_GT)) break;
+        #else
+        if (gpuTryLowResPolygon(packet,driver_idx,false,POLYTYPE_GT,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        #endif
+        PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,false,true,&protected_polygon);
+        gpuDrawPolyGT(packet, driver, false, protected_polygon);
       } break;
 
       case 0x38:
@@ -359,13 +416,22 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x3A:
       case 0x3B: {          // Gouraud-shaded 4-pt poly
         // See notes regarding '129' for 0x30..0x33 further above -senquack
-        PP driver = gpuPolySpanDrivers[
+        bool protected_polygon;
+        const u32 driver_idx=
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode |
           gpu_unai.Masking | Blending | 129 | gpu_unai.PixelMSB
-        ];
-        gpuDrawPolyG(packet, driver, true); // is_quad = true
+        ;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuScenePolygon(packet,driver_idx,true,POLYTYPE_G)) break;
+        #else
+        if (gpuTryLowResPolygon(packet,driver_idx,true,POLYTYPE_G,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        #endif
+        PP driver = gpuChooseGradientPolygonDriver(driver_idx,packet,true,&protected_polygon);
+        gpuDrawPolyG(packet, driver, true, protected_polygon); // is_quad = true
       } break;
 
       case 0x3C:
@@ -374,13 +440,22 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x3F: {          // Gouraud-shaded, textured 4-pt poly
         gpuSetCLUT    (gpu_unai.PacketBuffer.U4[2] >> 16);
         gpuSetTexture (gpu_unai.PacketBuffer.U4[5] >> 16);
-        PP driver = gpuPolySpanDrivers[
+        bool protected_polygon;
+        const u32 driver_idx=
           (gpu_unai.blit_mask?1024:0) |
           Dithering |
           Blending_Mode | gpu_unai.TEXT_MODE |
           gpu_unai.Masking | Blending | ((Lighting)?129:0) | gpu_unai.PixelMSB
-        ];
-        gpuDrawPolyGT(packet, driver, true); // is_quad = true
+        ;
+        #ifdef GPU_UNAI_LOWRES_EXPERIMENT
+        #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuScenePolygon(packet,driver_idx,true,POLYTYPE_GT)) break;
+        #else
+        if (gpuTryLowResPolygon(packet,driver_idx,true,POLYTYPE_GT,gpu_unai_config_ext.internal_resolution)) break;
+        #endif
+        #endif
+        PP driver = gpuChooseTexturePolygonDriver(driver_idx,packet,true,true,&protected_polygon);
+        gpuDrawPolyGT(packet, driver, true, protected_polygon); // is_quad = true
       } break;
 
       case 0x40:
@@ -390,7 +465,11 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // Shift index right by one, as untextured prims don't use lighting
         u32 driver_idx = (Blending_Mode | gpu_unai.Masking | Blending | (gpu_unai.PixelMSB>>3)) >> 1;
         PSD driver = gpuPixelSpanDrivers[driver_idx];
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneLine(packet,driver,false);
+        #else
         gpuDrawLineF(packet, driver);
+        #endif
       } break;
 
       case 0x48 ... 0x4F: { // Monochrome line strip
@@ -400,13 +479,21 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // Shift index right by one, as untextured prims don't use lighting
         u32 driver_idx = (Blending_Mode | gpu_unai.Masking | Blending | (gpu_unai.PixelMSB>>3)) >> 1;
         PSD driver = gpuPixelSpanDrivers[driver_idx];
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneLine(packet,driver,false);
+        #else
         gpuDrawLineF(packet, driver);
+        #endif
 
         while(1)
         {
           gpu_unai.PacketBuffer.U4[1] = gpu_unai.PacketBuffer.U4[2];
           gpu_unai.PacketBuffer.U4[2] = *list_position++;
-          gpuDrawLineF(packet, driver);
+          #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneLine(packet,driver,false);
+        #else
+        gpuDrawLineF(packet, driver);
+        #endif
 
           num_vertexes++;
           if(list_position >= list_end) {
@@ -429,7 +516,11 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // Index MSB selects Gouraud-shaded PixelSpanDriver:
         driver_idx |= (1 << 5);
         PSD driver = gpuPixelSpanDrivers[driver_idx];
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneLine(packet,driver,true);
+        #else
         gpuDrawLineG(packet, driver);
+        #endif
       } break;
 
       case 0x58 ... 0x5F: { // Gouraud-shaded line strip
@@ -441,7 +532,11 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // Index MSB selects Gouraud-shaded PixelSpanDriver:
         driver_idx |= (1 << 5);
         PSD driver = gpuPixelSpanDrivers[driver_idx];
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneLine(packet,driver,true);
+        #else
         gpuDrawLineG(packet, driver);
+        #endif
 
         while(1)
         {
@@ -449,7 +544,11 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
           gpu_unai.PacketBuffer.U4[1] = gpu_unai.PacketBuffer.U4[3];
           gpu_unai.PacketBuffer.U4[2] = *list_position++;
           gpu_unai.PacketBuffer.U4[3] = *list_position++;
-          gpuDrawLineG(packet, driver);
+          #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneLine(packet,driver,true);
+        #else
+        gpuDrawLineG(packet, driver);
+        #endif
 
           num_vertexes++;
           if(list_position >= list_end) {
@@ -468,7 +567,11 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x62:
       case 0x63: {          // Monochrome rectangle (variable size)
         PT driver = gpuTileSpanDrivers[(Blending_Mode | gpu_unai.Masking | Blending | (gpu_unai.PixelMSB>>3)) >> 1];
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneTile(packet,driver);
+        #else
         gpuDrawT(packet, driver);
+        #endif
       } break;
 
       case 0x64:
@@ -494,8 +597,12 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // Strip lower 3 bits of each color and determine if lighting should be used:
         if ((gpu_unai.PacketBuffer.U4[0] & 0xF8F8F8) != 0x808080)
           driver_idx |= Lighting;
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneSprite(packet,driver_idx);
+        #else
         PS driver = gpuSpriteSpanDrivers[driver_idx];
         gpuDrawS(packet, driver);
+        #endif
       } break;
 
       case 0x68:
@@ -504,7 +611,11 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x6B: {          // Monochrome rectangle (1x1 dot)
         gpu_unai.PacketBuffer.U4[2] = 0x00010001;
         PT driver = gpuTileSpanDrivers[(Blending_Mode | gpu_unai.Masking | Blending | (gpu_unai.PixelMSB>>3)) >> 1];
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneTile(packet,driver);
+        #else
         gpuDrawT(packet, driver);
+        #endif
       } break;
 
       case 0x70:
@@ -513,7 +624,11 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x73: {          // Monochrome rectangle (8x8)
         gpu_unai.PacketBuffer.U4[2] = 0x00080008;
         PT driver = gpuTileSpanDrivers[(Blending_Mode | gpu_unai.Masking | Blending | (gpu_unai.PixelMSB>>3)) >> 1];
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneTile(packet,driver);
+        #else
         gpuDrawT(packet, driver);
+        #endif
       } break;
 
       case 0x74:
@@ -529,8 +644,12 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // Strip lower 3 bits of each color and determine if lighting should be used:
         if ((gpu_unai.PacketBuffer.U4[0] & 0xF8F8F8) != 0x808080)
           driver_idx |= Lighting;
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneSprite(packet,driver_idx);
+        #else
         PS driver = gpuSpriteSpanDrivers[driver_idx];
         gpuDrawS(packet, driver);
+        #endif
       } break;
 
       case 0x78:
@@ -539,7 +658,11 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
       case 0x7B: {          // Monochrome rectangle (16x16)
         gpu_unai.PacketBuffer.U4[2] = 0x00100010;
         PT driver = gpuTileSpanDrivers[(Blending_Mode | gpu_unai.Masking | Blending | (gpu_unai.PixelMSB>>3)) >> 1];
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneTile(packet,driver);
+        #else
         gpuDrawT(packet, driver);
+        #endif
       } break;
 
       case 0x7C:
@@ -563,11 +686,18 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         // Strip lower 3 bits of each color and determine if lighting should be used:
         if ((gpu_unai.PacketBuffer.U4[0] & 0xF8F8F8) != 0x808080)
           driver_idx |= Lighting;
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneSprite(packet,driver_idx);
+        #else
         PS driver = gpuSpriteSpanDrivers[driver_idx];
         gpuDrawS(packet, driver);
+        #endif
       } break;
 
       case 0x80:          //  vid -> vid
+        #ifdef GPU_UNAI_FULL_SCENE
+        gpuSceneFlush();gpuSceneInvalidate();
+        #endif
         gpuMoveImage(packet);
         break;
 
@@ -611,10 +741,41 @@ void renderer_sync_ecmds(uint32_t *ecmds)
 
 void renderer_update_caches(int x, int y, int w, int h)
 {
+#ifdef GPU_UNAI_FULL_SCENE
+  // A transfer has modified native VRAM after the pre-transfer flush.
+  gpuSceneWriteEnd(x,y,w,h);
+#endif
 }
+
+#ifdef GPU_UNAI_FULL_SCENE
+void renderer_vram_write_begin(int x,int y,int w,int h)
+{
+  // Texture-only uploads do not require expanding an unrelated framebuffer.
+  gpuSceneWriteBegin(x,y,w,h);
+}
+
+const uint16_t *renderer_scene_surface(uint16_t clip[4],unsigned *shift)
+{
+  if (gpu_unai_config_ext.internal_resolution!=gpu_scene.shift) {
+    gpuSceneFlush();gpuSceneInvalidate();
+  }
+  for (unsigned i=0;i<2;++i) {
+    const gpu_scene_cache_t &c=gpu_scene.cache[i];
+    if (c.valid && gpu.screen.x>=c.clip[0] && gpu.screen.y>=c.clip[1] &&
+        gpu.screen.x+gpu.screen.hres<=c.clip[2] && gpu.screen.y+gpu.screen.h<=c.clip[3]) {
+      memcpy(clip,c.clip,sizeof c.clip);*shift=gpu_scene.shift;return gpu_scene.target;
+    }
+  }
+  // A viewport spanning multiple surfaces uses the coherent native image.
+  gpuSceneFlush();return NULL;
+}
+#endif
 
 void renderer_flush_queues(void)
 {
+#ifdef GPU_UNAI_FULL_SCENE
+  gpuSceneFlush();
+#endif
 }
 
 void renderer_set_interlace(int enable, int is_odd)

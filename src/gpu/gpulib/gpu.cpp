@@ -418,7 +418,12 @@ static void start_vram_transfer(uint32_t pos_word, uint32_t size_word, int is_re
   gpu.dma.is_read = is_read;
   gpu.dma_start = gpu.dma;
 
+#ifdef GPU_UNAI_FULL_SCENE
+  if (!is_read) renderer_vram_write_begin(gpu.dma.x,gpu.dma.y,gpu.dma.w,gpu.dma.h);
+  else renderer_flush_queues();
+#else
   renderer_flush_queues();
+#endif
   if (is_read) {
     gpu.status.img = 1;
     // XXX: wrong for width 1
@@ -700,12 +705,14 @@ long GPU_freeze(uint32_t type, GPUFreeze_t *freeze)
     case 1: // save
       if (gpu.cmd_len > 0)
         flush_cmd_buffer();
+      renderer_flush_queues();
       memcpy(freeze->psxVRam, gpu.vram, 1024 * 512 * 2);
       memcpy(freeze->ulControl, gpu.regs, sizeof(gpu.regs));
       memcpy(freeze->ulControl + 0xe0, gpu.ex_regs, sizeof(gpu.ex_regs));
       freeze->ulStatus = gpu.status.reg;
       break;
     case 0: // load
+      renderer_update_caches(0, 0, 1024, 512); // discard the previous render target
       memcpy(gpu.vram, freeze->psxVRam, 1024 * 512 * 2);
       memcpy(gpu.regs, freeze->ulControl, sizeof(gpu.regs));
       memcpy(gpu.ex_regs, freeze->ulControl + 0xe0, sizeof(gpu.ex_regs));
@@ -727,7 +734,9 @@ void GPU_updateLace(void)
 {
   if (gpu.cmd_len > 0)
     flush_cmd_buffer();
+#ifndef GPU_UNAI_FULL_SCENE
   renderer_flush_queues();
+#endif
 
   if (gpu.status.blanking) {
     if (!gpu.state.blanked) {

@@ -1,13 +1,23 @@
 # Handoff técnico — PCSX4All / RS-97 V3.0: optimización del dynarec MIPS
 
-**Fecha inicial:** 2026-10-27; estado actualizado el 2026-10-30
+**Fecha inicial:** 2026-10-27; estado actualizado el 2026-10-31
 **Repositorio de trabajo:** https://github.com/RealLotex/pcsx4all  
 **Upstream:** https://github.com/retrofw/pcsx4all  
 **Rama principal:** `master`  
 **HEAD verificado al preparar el handoff:** `4a235df9840014f99a64943d448db56e29f47d79`  
 **Pruebas CI de ese commit:** success — https://github.com/RealLotex/pcsx4all/actions/runs/40576738623
 
-## Estado actual verificado — 2026-10-30
+## Escena completa y presentación — actualización 2026-10-31
+
+- La [PR #11](https://github.com/RealLotex/pcsx4all/pull/11) reúne los controles gráficos, el renderizado de toda la escena y la presentación agrupada. No contiene los prototipos descartados del asignador de registros, divisiones ni Gouraud uniforme. El código CPU/GTE de master se conserva.
+- El antiguo nombre Internal resolution describía sólo muestreo de ciertos polígonos. Se reemplazó por superficies reducidas para todos los tipos de primitivas, incluidos sprites, texto y HUD; ambos buffers se conservan entre flips. En 320x240, Half/Quarter/Eighth dibujan a 160x120/80x60/40x30. El usuario autorizó reducir también las fuentes. Es un modo gráfico deliberadamente inexacto; Original sigue siendo el valor predeterminado.
+- Compilar con `INTERNAL_RESOLUTION=1` habilita el menú y selecciona por defecto la implementación de escena completa (`FULL_SCENE=1`). El build predeterminado conserva `INTERNAL_RESOLUTION=0`; `FULL_SCENE=0` queda para comparar el prototipo selectivo antiguo. Detalles y límites: [FULL_SCENE_RESOLUTION.md](FULL_SCENE_RESOLUTION.md).
+- En la primera comparación de escena completa, Quarter redujo CPU QEMU 12,4% en GT y 10,5% en Silent Hill frente a Original dentro del mismo binario. Después, un perfil externo por bloques MIPS identificó gasto redundante de presentación. Agrupar muestras y copiar filas repetidas redujo CPU otro 17,1% en GT (18,24 a 15,12 s de mediana) y 18,9% en Silent Hill (15,59 a 12,64 s), comparando Quarter escalar/agrupado dentro de otro único ejecutable. **No sumar porcentajes de distintas comparaciones ni convertirlos en FPS de consola.**
+- La presentación agrupada produce los mismos píxeles: 9.216 casos host/sanitizadores/MIPS, RGB15/RGB24, formatos de salida, orígenes impares y vueltas de VRAM. En Quarter lee/convierte 4.800 muestras en vez de 76.800, conservando los 76.800 píxeles de salida. Las 48 capturas de juego coinciden entre las dos rutas y con la entrega anterior.
+- Dos candidatas adicionales se descartaron: tabla exacta de divisores de raster (39.635.123 casos correctos, pero GT +3,2%/+2,3% CPU en Original/Quarter; atajos cero/uno casi iguales), e interpolación Gouraud constante (40.320 casos equivalentes, pero ningún caso aplicable en el perfil GT). No repetirlas sin evidencia nueva.
+- Todavía faltan FPS de esta entrega en la RS-97. El último dato recibido, aproximadamente 40/60 en GT, corresponde a builds anteriores. El objetivo de rendimiento real en el dispositivo no está demostrado por CI o QEMU. Firmware y bootloader no se modifican.
+
+## Estado histórico verificado — 2026-10-30
 
 - `master` contiene la [PR #8](https://github.com/RealLotex/pcsx4all/pull/8), commit `29f7ebc7bcc758d41c2e8e6124d6015b49d877da`: comprobación exacta del desbordamiento de acumuladores GTE de 64 a 32 bits con menos ramas. Conserva el valor completo y los flags; no reducir el retorno a 32 bits ni volver a presentar esta optimización como nueva. Está habilitada por defecto; un árbol limpio con `GTE_SIGNED32_BOUNDS=0` recupera la ruta anterior.
 - Se verificaron compilaciones completas de OPK de referencia y optimizado con el SDK oficial RetroFW, pruebas host con ASan/UBSan, tres millones de entradas del helper y 220.000 comparaciones de estado completo de los 22 comandos aritméticos GTE en host y MIPS/QEMU. [CI de esa PR](https://github.com/RealLotex/pcsx4all/actions/runs/41135055000). Alcance y comandos: [RS97_GTE_SIGNED32_BOUNDS.md](RS97_GTE_SIGNED32_BOUNDS.md).

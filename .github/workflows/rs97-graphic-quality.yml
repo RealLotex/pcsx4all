@@ -1,0 +1,68 @@
+name: RS-97 optional 3D quality controls
+on:
+  pull_request:
+    branches: [master, experiment-potato-textures, experiment-internal-resolution, experiment-full-raster]
+  push:
+    branches: [experiment-potato-textures, experiment-internal-resolution, experiment-full-raster, experiment-scene-scanout]
+permissions:
+  contents: read
+jobs:
+  renderer-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise whole-scene command dispatch and VRAM barriers
+        run: bash tests/run_scene_tests.sh
+      - name: Compare grouped scanout against scalar output
+        run: |
+          g++ -std=c++03 -O2 -Wall -Wextra -Werror tests/test_rs97_scene_scanout.cpp -o /tmp/test-scanout
+          /tmp/test-scanout
+          g++ -std=c++03 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_rs97_scene_scanout.cpp -o /tmp/test-scanout-san
+          UBSAN_OPTIONS=halt_on_error=1 /tmp/test-scanout-san
+      - name: Check whole-scene memory safety
+        run: |
+          SCENE_TEST_FLAGS='-fsanitize=address,undefined -fno-sanitize=shift,signed-integer-overflow -fno-omit-frame-pointer' SCENE_TEST_OUTPUT=/tmp/test-scene-san bash tests/run_scene_tests.sh
+      - name: Test quality levels, text protections and fallback paths
+        run: |
+          g++ -std=c++03 -O2 -Wall -Wextra -Werror -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_texture_quality.cpp -o /tmp/test-quality
+          /tmp/test-quality
+          g++ -std=c++03 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_texture_quality.cpp -o /tmp/test-quality-san
+          UBSAN_OPTIONS=halt_on_error=1 /tmp/test-quality-san
+      - name: Compare lower-resolution samples and native destination effects
+        run: |
+          g++ -std=c++03 -O1 -Wall -Wextra -Werror -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_lowres.cpp -o /tmp/test-lowres
+          /tmp/test-lowres
+          g++ -std=c++03 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_lowres.cpp -o /tmp/test-lowres-san
+          UBSAN_OPTIONS=halt_on_error=1 /tmp/test-lowres-san
+  retrofw-mips:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install official RetroFW SDK and QEMU
+        run: |
+          curl --fail --location --retry 3 -o /tmp/retrofw-sdk.tar.gz https://github.com/retrofw/retrofw.github.io/releases/download/v2.3/mipsel-RetroFW-linux-uclibc_sdk-buildroot.tar.gz
+          echo '8ceda398f9f4ba6d64c3c48c8699c0d6b2617090ca3a56db1a547ad7d5e0b80a  /tmp/retrofw-sdk.tar.gz' | sha256sum -c -
+          sudo mkdir -p /opt/retrofw-sdk
+          sudo chown "$USER" /opt/retrofw-sdk
+          tar -xzf /tmp/retrofw-sdk.tar.gz -C /opt/retrofw-sdk --strip-components=1
+          /opt/retrofw-sdk/relocate-sdk.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y squashfs-tools qemu-user
+      - name: Test renderer and configuration on MIPS
+        run: |
+          cxx=/opt/retrofw-sdk/bin/mipsel-linux-g++
+          sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
+          "$cxx" -std=c++03 -O2 -mips32 -mno-abicalls -fno-PIC -Wall -Wextra -Werror tests/test_rs97_scene_scanout.cpp -o /tmp/test-scanout-mips
+          qemu-mipsel -L "$sysroot" /tmp/test-scanout-mips
+          "$cxx" -std=c++03 -O2 -mips32 -mno-abicalls -fno-PIC -Wall -Wextra -Werror -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_texture_quality.cpp -o /tmp/test-quality-mips
+          qemu-mipsel -L "$sysroot" /tmp/test-quality-mips
+          "$cxx" -std=c++03 -O1 -mips32 -mno-abicalls -fno-PIC -Wall -Wextra -Werror -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_lowres.cpp -o /tmp/test-lowres-mips
+          qemu-mipsel -L "$sysroot" /tmp/test-lowres-mips
+          CXX="$cxx" SCENE_TEST_FLAGS='-mips32 -mno-abicalls -fno-PIC' SCENE_TEST_RUNNER="qemu-mipsel -L $sysroot" SCENE_TEST_OUTPUT=/tmp/test-scene-mips bash tests/run_scene_tests.sh
+          bash tests/run_graphic_quality_config.sh
+      - name: Cross-build RetroFW OPK
+        run: |
+          make maketree CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          make -j2 opk INTERNAL_RESOLUTION=1 FULL_SCENE=1 CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          /opt/retrofw-sdk/bin/mipsel-linux-readelf -h pcsx4all/pcsx4all.dge

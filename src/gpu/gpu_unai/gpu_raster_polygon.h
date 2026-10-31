@@ -27,6 +27,9 @@
 
 struct PolyVertex {
 	s32 x, y; // Sign-extended 11-bit X,Y coords
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+	s32 native_x, native_y;
+#endif
 	union {
 		struct { u8 u, v, pad[2]; } tex; // Texture coords (if used)
 		u32 tex_word;
@@ -53,7 +56,7 @@ enum PolyType {
 // polyInitVertexBuffer()
 // Fills vbuf[] array with data from any type of poly draw-command packet.
 ///////////////////////////////////////////////////////////////////////////////
-static void polyInitVertexBuffer(PolyVertex *vbuf, const PtrUnion packet, PolyType ptype, u32 is_quad)
+static void polyInitVertexBuffer(PolyVertex *vbuf, const PtrUnion packet, PolyType ptype, u32 is_quad, int protected_polygon=-1)
 {
 	bool texturing = ptype & POLYATTR_TEXTURE;
 	bool gouraud   = ptype & POLYATTR_GOURAUD;
@@ -75,6 +78,21 @@ static void polyInitVertexBuffer(PolyVertex *vbuf, const PtrUnion packet, PolyTy
 		s16* coord_ptr = (s16*)ptr;
 		vbuf[i].x = GPU_EXPANDSIGN(coord_ptr[0]) + x_off;
 		vbuf[i].y = GPU_EXPANDSIGN(coord_ptr[1]) + y_off;
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+		vbuf[i].native_x=vbuf[i].x; vbuf[i].native_y=vbuf[i].y;
+		if (gpu_lowres.shift) {
+			vbuf[i].x >>= gpu_lowres.shift;
+			vbuf[i].y >>= gpu_lowres.shift;
+		}
+#endif
+	}
+	if (texturing && gpu_unai_config_ext.vertex_grid &&
+	    !(protected_polygon<0 ? gpuTextureLooksLike2D(packet,is_quad!=0,gouraud) : protected_polygon!=0)) {
+		const s32 step=(s32)(1u << gpu_unai_config_ext.vertex_grid);
+		for (int i=0;i<num_verts;++i) {
+			vbuf[i].x=(vbuf[i].x+step/2)&~(step-1);
+			vbuf[i].y=(vbuf[i].y+step/2)&~(step-1);
+		}
 	}
 
 	// U,V texture coords (if applicable)
@@ -163,10 +181,22 @@ static inline int vertIdxOfHighestYCoord3(const T *Tptr)
 //   or 1 for second triangle of a quad (idx 1,2,3 of vbuf[]).
 //  Returns true if triangle should be rendered, false if not.
 ///////////////////////////////////////////////////////////////////////////////
-static bool polyUseTriangle(const PolyVertex *vbuf, int tri_num, const PolyVertex **vert_ptrs)
+static bool polyUseTriangle(const PolyVertex *vbuf, int tri_num, const PolyVertex **vert_ptrs, u32 small_limit=0)
 {
 	// Using verts 0,1,2 or is this the 2nd pass of a quad (verts 1,2,3)?
 	const PolyVertex *tri_ptr = &vbuf[(tri_num == 0) ? 0 : 1];
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+	if (gpu_lowres.shift) {
+		s32 xmin=tri_ptr[0].native_x,xmax=xmin,ymin=tri_ptr[0].native_y,ymax=ymin;
+		for (unsigned i=1;i<3;++i) {
+			if (tri_ptr[i].native_x<xmin) xmin=tri_ptr[i].native_x;
+			if (tri_ptr[i].native_x>xmax) xmax=tri_ptr[i].native_x;
+			if (tri_ptr[i].native_y<ymin) ymin=tri_ptr[i].native_y;
+			if (tri_ptr[i].native_y>ymax) ymax=tri_ptr[i].native_y;
+		}
+		if (xmax-xmin>=CHKMAX_X || ymax-ymin>=CHKMAX_Y) return false;
+	}
+#endif
 
 	// Get indices of highest/lowest X,Y coords within triangle
 	int idx_lowest_x  = vertIdxOfLeastXCoord3(tri_ptr);
@@ -182,6 +212,9 @@ static bool polyUseTriangle(const PolyVertex *vbuf, int tri_num, const PolyVerte
 	int highest_y = tri_ptr[idx_highest_y].y;
 	if ((highest_x - lowest_x) >= CHKMAX_X ||
 	    (highest_y - lowest_y) >= CHKMAX_Y)
+		return false;
+	if (small_limit && (u32)(highest_x-lowest_x)<small_limit &&
+	    (u32)(highest_y-lowest_y)<small_limit)
 		return false;
 
 	// Determine if triangle is completely outside clipping range
@@ -363,8 +396,13 @@ void gpuDrawPolyF(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad
 /*----------------------------------------------------------------------
 gpuDrawPolyFT - Flat-shaded, textured poly
 ----------------------------------------------------------------------*/
-void gpuDrawPolyFT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad)
+void gpuDrawPolyFT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad, int protected_polygon=-1)
 {
+	if (protected_polygon<0 && (gpu_unai_config_ext.small_polygons || gpu_unai_config_ext.vertex_grid))
+		protected_polygon=gpuTextureLooksLike2D(packet,is_quad!=0,false);
+	const u32 small_limit=(gpu_unai_config_ext.small_polygons &&
+		protected_polygon==0) ?
+		(2u<<gpu_unai_config_ext.small_polygons) : 0u;
 	// r8/g8/b8 used if texture-blending & dithering is applied (24-bit light)
 	gpu_unai.r8 = packet.U1[0];
 	gpu_unai.g8 = packet.U1[1];
@@ -375,14 +413,14 @@ void gpuDrawPolyFT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_qua
 	gpu_unai.b5 = packet.U1[2] >> 3;
 
 	PolyVertex vbuf[4];
-	polyInitVertexBuffer(vbuf, packet, POLYTYPE_FT, is_quad);
+	polyInitVertexBuffer(vbuf, packet, POLYTYPE_FT, is_quad, protected_polygon);
 
 	int total_passes = is_quad ? 2 : 1;
 	int cur_pass = 0;
 	do
 	{
 		const PolyVertex* vptrs[3];
-		if (polyUseTriangle(vbuf, cur_pass, vptrs) == false)
+		if (polyUseTriangle(vbuf, cur_pass, vptrs, small_limit) == false)
 			continue;
 
 		s32 xa, xb, ya, yb;
@@ -696,8 +734,18 @@ void gpuDrawPolyFT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_qua
 /*----------------------------------------------------------------------
 gpuDrawPolyG - Gouraud-shaded, untextured poly
 ----------------------------------------------------------------------*/
-void gpuDrawPolyG(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad)
+void gpuDrawPolyG(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad, int protected_polygon=-1)
 {
+	if (protected_polygon<0 && gpu_unai_config_ext.small_polygons)
+		protected_polygon=gpuTextureLooksLike2D(packet,is_quad!=0,false);
+	const u32 small_limit=(gpu_unai_config_ext.small_polygons &&
+		protected_polygon==0) ?
+		(2u<<gpu_unai_config_ext.small_polygons) : 0u;
+	if (gpuPolySpanDriver == gpuFlatGradientSpan) {
+		gpu_unai.r5 = packet.U1[0] >> 3;
+		gpu_unai.g5 = packet.U1[1] >> 3;
+		gpu_unai.b5 = packet.U1[2] >> 3;
+	}
 	PolyVertex vbuf[4];
 	polyInitVertexBuffer(vbuf, packet, POLYTYPE_G, is_quad);
 
@@ -706,7 +754,7 @@ void gpuDrawPolyG(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad
 	do
 	{
 		const PolyVertex* vptrs[3];
-		if (polyUseTriangle(vbuf, cur_pass, vptrs) == false)
+		if (polyUseTriangle(vbuf, cur_pass, vptrs, small_limit) == false)
 			continue;
 
 		s32 xa, xb, ya, yb;
@@ -1044,17 +1092,22 @@ void gpuDrawPolyG(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad
 /*----------------------------------------------------------------------
 gpuDrawPolyGT - Gouraud-shaded, textured poly
 ----------------------------------------------------------------------*/
-void gpuDrawPolyGT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad)
+void gpuDrawPolyGT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_quad, int protected_polygon=-1)
 {
+	if (protected_polygon<0 && (gpu_unai_config_ext.small_polygons || gpu_unai_config_ext.vertex_grid))
+		protected_polygon=gpuTextureLooksLike2D(packet,is_quad!=0,true);
+	const u32 small_limit=(gpu_unai_config_ext.small_polygons &&
+		protected_polygon==0) ?
+		(2u<<gpu_unai_config_ext.small_polygons) : 0u;
 	PolyVertex vbuf[4];
-	polyInitVertexBuffer(vbuf, packet, POLYTYPE_GT, is_quad);
+	polyInitVertexBuffer(vbuf, packet, POLYTYPE_GT, is_quad, protected_polygon);
 
 	int total_passes = is_quad ? 2 : 1;
 	int cur_pass = 0;
 	do
 	{
 		const PolyVertex* vptrs[3];
-		if (polyUseTriangle(vbuf, cur_pass, vptrs) == false)
+		if (polyUseTriangle(vbuf, cur_pass, vptrs, small_limit) == false)
 			continue;
 
 		s32 xa, xb, ya, yb;
@@ -1446,3 +1499,7 @@ void gpuDrawPolyGT(const PtrUnion packet, const PP gpuPolySpanDriver, u32 is_qua
 		}
 	} while (++cur_pass < total_passes);
 }
+
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+#include "gpu_lowres_dispatch.h"
+#endif

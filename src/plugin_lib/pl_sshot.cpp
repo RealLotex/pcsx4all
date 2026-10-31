@@ -25,6 +25,9 @@
 #include <string.h>
 
 #include "plugin_lib.h"
+#if defined(USE_GPULIB) && defined(GPU_UNAI_FULL_SCENE)
+#include "gpu/gpulib/gpu.h"
+#endif
 
 #define RGB16(C)     ((((C)&(0x1f<<10))>>10) | (((C)&(0x1f<<5))<<1) | (((C)&(0x1f))<<11))
 #define RGB24(R,G,B) ((((R)&0xF8)<<8)|(((G)&0xFC)<<3)|(((B)&0xF8)>>3))
@@ -33,6 +36,11 @@
 // (Simple pixel-dropping downscaling.. TODO: add interpolation)
 void pl_screenshot_160x120_rgb565(uint16_t *dst)
 {
+#if defined(USE_GPULIB) && defined(GPU_UNAI_FULL_SCENE)
+	// Screen metadata is queried every frame. Only actual pixel readers
+	// require expansion of the deferred reduced-resolution render target.
+	renderer_flush_queues();
+#endif
 	memset((void*)dst, 0, 160*120*2);
 	int x = pl_data.sinfo.x;
 	int y = pl_data.sinfo.y;

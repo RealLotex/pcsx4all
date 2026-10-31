@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, rs97-render-optimizations]
   pull_request:
-    branches: [master]
+    branches: [master, experiment-potato-textures]
 
 permissions:
   contents: read

@@ -723,6 +723,12 @@ const PP gpuPolySpanDrivers[2048] = {
 	TIBLOCK(4<<8), TIBLOCK(5<<8), TIBLOCK(6<<8), TIBLOCK(7<<8)
 };
 
+#include "gpu_texture_quality.h"
+#include "gpu_gradient_quality.h"
+#ifdef GPU_UNAI_LOWRES_EXPERIMENT
+#include "gpu_lowres.h"
+#endif
+
 #undef TI
 #undef TN
 #undef TIBLOCK

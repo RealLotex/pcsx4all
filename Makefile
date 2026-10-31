@@ -7,9 +7,9 @@ RS97   = 1
 # Using 'gpulib' adapted from PCSX Rearmed is default, specify
 # USE_GPULIB=0 as param to 'make' when building to disable it.
 USE_GPULIB ?= 1
-# Experimental lower-resolution 3D rasterizer; native rendering is the default.
+# Optional whole-scene resolution menu; Original rendering remains the default.
 INTERNAL_RESOLUTION ?= 0
-FULL_SCENE ?= 0
+FULL_SCENE ?= 1
 
 #GPU = gpu_dfxvideo
 #GPU = gpu_drhell

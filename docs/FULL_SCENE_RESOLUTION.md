@@ -5,6 +5,8 @@ flags). The graphics menu keeps **Internal resolution: original / half /
 quarter / eighth**. Original is the default. Each step divides both render
 dimensions: a 320x240 scene becomes 160x120, 80x60 or 40x30. Text and HUD are
 included, as requested; there is no UI-preservation heuristic in this mode.
+Enabling `INTERNAL_RESOLUTION=1` now selects the whole-scene implementation by
+default. Explicit `FULL_SCENE=0` is only for comparing the older selective path.
 
 The previous experiment reduced selected polygon sampling and immediately
 expanded every fragment into native VRAM. Sprites, rectangles and common UI

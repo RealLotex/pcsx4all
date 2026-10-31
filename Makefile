@@ -9,6 +9,7 @@ RS97   = 1
 USE_GPULIB ?= 1
 # Experimental lower-resolution 3D rasterizer; native rendering is the default.
 INTERNAL_RESOLUTION ?= 0
+FULL_SCENE ?= 0
 
 #GPU = gpu_dfxvideo
 #GPU = gpu_drhell
@@ -60,6 +61,9 @@ CFLAGS += -D$(shell echo $(SPU) | tr a-z A-Z)
 CFLAGS += -DFORCE_MEMCPY32
 ifeq ($(INTERNAL_RESOLUTION)$(USE_GPULIB),11)
 CFLAGS += -DGPU_UNAI_LOWRES_EXPERIMENT
+ifeq ($(FULL_SCENE),1)
+CFLAGS += -DGPU_UNAI_FULL_SCENE
+endif
 endif
 ifeq ($(GTE_SIGNED32_BOUNDS),1)
 CFLAGS += -DGTE_SIGNED32_BOUNDS_EXPERIMENT

@@ -46,7 +46,7 @@ struct gpu_unai_config_t {
 	uint8_t gradient_quality:2; // Gouraud shading: original, 2px, 4px, or flat
 	uint8_t vertex_grid:2; // Original, or snap textured 3D vertices to a 2/4/8px grid
 	uint8_t small_polygons:2; // Preserve all, or cull boxes smaller than 4/8/16 pixels
-	uint8_t internal_resolution:2; // Native, half, quarter, eighth polygon raster dimensions
+	uint8_t internal_resolution:2; // Original, half, quarter, eighth dimensions (including HUD in FULL_SCENE)
 
 	//senquack Only PCSX Rearmed's version of gpu_unai had this, and I
 	// don't think it's necessary. It would require adding 'AH' flag to

@@ -1,9 +1,9 @@
 name: RS-97 optional 3D quality controls
 on:
   pull_request:
-    branches: [master, experiment-potato-textures]
+    branches: [master, experiment-potato-textures, experiment-internal-resolution]
   push:
-    branches: [experiment-potato-textures, experiment-internal-resolution]
+    branches: [experiment-potato-textures, experiment-internal-resolution, experiment-full-raster]
 permissions:
   contents: read
 jobs:
@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Exercise whole-scene command dispatch and VRAM barriers
+        run: bash tests/run_scene_tests.sh
+      - name: Check whole-scene memory safety
+        run: |
+          SCENE_TEST_FLAGS='-fsanitize=address,undefined -fno-sanitize=shift,signed-integer-overflow -fno-omit-frame-pointer' SCENE_TEST_OUTPUT=/tmp/test-scene-san bash tests/run_scene_tests.sh
       - name: Test quality levels, text protections and fallback paths
         run: |
           g++ -std=c++03 -O2 -Wall -Wextra -Werror -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_texture_quality.cpp -o /tmp/test-quality
@@ -46,9 +51,10 @@ jobs:
           qemu-mipsel -L "$sysroot" /tmp/test-quality-mips
           "$cxx" -std=c++03 -O1 -mips32 -mno-abicalls -fno-PIC -Wall -Wextra -Werror -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_lowres.cpp -o /tmp/test-lowres-mips
           qemu-mipsel -L "$sysroot" /tmp/test-lowres-mips
+          CXX="$cxx" SCENE_TEST_FLAGS='-mips32 -mno-abicalls -fno-PIC' SCENE_TEST_RUNNER="qemu-mipsel -L $sysroot" SCENE_TEST_OUTPUT=/tmp/test-scene-mips bash tests/run_scene_tests.sh
           bash tests/run_graphic_quality_config.sh
       - name: Cross-build RetroFW OPK
         run: |
           make maketree CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
-          make -j2 opk INTERNAL_RESOLUTION=1 CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
+          make -j2 opk INTERNAL_RESOLUTION=1 FULL_SCENE=1 CROSS_COMPILE=/opt/retrofw-sdk/bin/mipsel-linux-
           /opt/retrofw-sdk/bin/mipsel-linux-readelf -h pcsx4all/pcsx4all.dge

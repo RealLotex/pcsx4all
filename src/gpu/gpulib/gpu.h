@@ -137,6 +137,10 @@ void renderer_flush_queues(void);
 void renderer_set_interlace(int enable, int is_odd);
 void renderer_set_config(const gpulib_config_t *config);
 void renderer_notify_res_change(void);
+#ifdef GPU_UNAI_FULL_SCENE
+void renderer_vram_write_begin(int x,int y,int w,int h);
+const uint16_t *renderer_scene_surface(uint16_t clip[4],unsigned *shift);
+#endif
 
 int  vout_init(void);
 int  vout_finish(void);

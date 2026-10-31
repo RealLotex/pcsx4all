@@ -794,7 +794,6 @@ void GPU_requestScreenRedraw()
 
 void GPU_getScreenInfo(GPUScreenInfo_t *sinfo)
 {
-	renderer_flush_queues(); // screenshots/readers require coherent native VRAM
 	sinfo->vram    = (uint8_t*)gpu.vram;
 	sinfo->x       = (uint16_t)gpu.screen.x;
 	sinfo->y       = (uint16_t)gpu.screen.y;

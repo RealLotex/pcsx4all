@@ -84,8 +84,12 @@ int main() {
         // Present directly from the small surface, without expanding VRAM.
         gpu.screen.x=gpu.screen.y=0;gpu.screen.hres=320;gpu.screen.vres=240;gpu.screen.h=240;
         gpu.status.rgb24=0;gpu.status.blanking=0;gpu.state.fb_dirty=1;
+        GPUScreenInfo_t info;GPU_getScreenInfo(&info);
+        assert(gpu_scene.expanded==0); // per-frame metadata is not a readback
         GPU_updateLace();assert(gpu_scene.expanded==0 && flips==s);
         assert(screen[16u*320u+16u]==0xf800u);
+        pl_data.sinfo=info;uint16_t preview[160u*120u];
+        pl_screenshot_160x120_rgb565(preview);assert(gpu_scene.resolves==1);
         renderer_flush_queues();assert(gpu_scene.resolves==1);
         assert(gpu_scene.expanded==320u*240u);
         printf("shift=%u opaque target fragments=%llu native resolve writes=%llu\n",s,

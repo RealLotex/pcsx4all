@@ -265,6 +265,7 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
     {
       case 0x02:
         #ifdef GPU_UNAI_FULL_SCENE
+        if (gpuSceneClear(packet)) break;
         gpuSceneFlush();gpuSceneInvalidate();
         #endif
         gpuClearImage(packet);
@@ -719,10 +720,6 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
         goto breakloop;
 #endif
       case 0xE1 ... 0xE6: { // Draw settings
-        #ifdef GPU_UNAI_FULL_SCENE
-        // Resolve the old clip before applying drawing-area changes.
-        if (cmd==0xe3 || cmd==0xe4) gpuSceneFlush();
-        #endif
         gpuGP0Cmd_0xEx(gpu_unai, gpu_unai.PacketBuffer.U4[0]);
       } break;
     }
@@ -746,7 +743,7 @@ void renderer_update_caches(int x, int y, int w, int h)
 {
 #ifdef GPU_UNAI_FULL_SCENE
   // A transfer has modified native VRAM after the pre-transfer flush.
-  if (gpuSceneOverlaps(x,y,w,h)) gpuSceneInvalidate();
+  gpuSceneWriteEnd(x,y,w,h);
 #endif
 }
 
@@ -754,7 +751,7 @@ void renderer_update_caches(int x, int y, int w, int h)
 void renderer_vram_write_begin(int x,int y,int w,int h)
 {
   // Texture-only uploads do not require expanding an unrelated framebuffer.
-  if (gpuSceneOverlaps(x,y,w,h)) gpuSceneFlush();
+  gpuSceneWriteBegin(x,y,w,h);
 }
 
 const uint16_t *renderer_scene_surface(uint16_t clip[4],unsigned *shift)
@@ -762,9 +759,15 @@ const uint16_t *renderer_scene_surface(uint16_t clip[4],unsigned *shift)
   if (gpu_unai_config_ext.internal_resolution!=gpu_scene.shift) {
     gpuSceneFlush();gpuSceneInvalidate();
   }
-  if (!gpu_scene.valid) return NULL;
-  memcpy(clip,gpu_scene.clip,sizeof gpu_scene.clip);*shift=gpu_scene.shift;
-  return gpu_scene.target;
+  for (unsigned i=0;i<2;++i) {
+    const gpu_scene_cache_t &c=gpu_scene.cache[i];
+    if (c.valid && gpu.screen.x>=c.clip[0] && gpu.screen.y>=c.clip[1] &&
+        gpu.screen.x+gpu.screen.hres<=c.clip[2] && gpu.screen.y+gpu.screen.h<=c.clip[3]) {
+      memcpy(clip,c.clip,sizeof c.clip);*shift=gpu_scene.shift;return gpu_scene.target;
+    }
+  }
+  // A viewport spanning multiple surfaces uses the coherent native image.
+  gpuSceneFlush();return NULL;
 }
 #endif
 

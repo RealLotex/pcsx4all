@@ -15,10 +15,12 @@ The new implementation redirects all polygon, line, rectangle and sprite
 families to a separate smaller render surface. Texture/CLUT storage remains
 native. Destination reads, blending and writes happen at reduced resolution.
 Scanout reads the small surface directly and enlarges it for the RS-97 screen.
-Native VRAM is resolved when a readback, framebuffer texture dependency, copy,
-drawing-area change or save state requires it. Uploads outside the render area
-do not expand or discard an unrelated surface. Loading a state discards the old
-surface before restoring VRAM.
+Two nonoverlapping render areas are retained across framebuffer flips. Native
+VRAM is resolved when a readback, framebuffer texture dependency, copy, cache
+eviction or save state requires it. Framebuffer clears also fill the small
+surface directly. Uploads invalidate only overlapping surfaces. Loading a state
+discards both old surfaces before restoring VRAM. Per-frame screen metadata
+queries do not trigger expansion; screenshot pixel readers do.
 
 In the dispatch regression, eight overlapping 64x64 opaque quads generate
 8,192 / 2,048 / 512 destination fragments at half / quarter / eighth, compared

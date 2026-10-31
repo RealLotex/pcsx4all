@@ -47,7 +47,7 @@ int main() {
         commands(tile,3);commands(flat,4);commands(ft,7);commands(g,6);
         commands(gt,9);commands(line,3);commands(gl,4);commands(sprite,4);
         if(s) {
-            assert(gpu_scene.dirty && gpu_lowres.shift==0 && gpu_unai.vram==memory);
+            assert(gpuSceneActive().dirty && gpu_lowres.shift==0 && gpu_unai.vram==memory);
             assert(memory[0]==0); // No per-fragment native-size expansion.
             const uint64_t n=gpu_scene.resolves;
             renderer_flush_queues();assert(gpu_scene.resolves==n+1);
@@ -59,7 +59,7 @@ int main() {
         } else {
             memcpy(baseline,memory,sizeof memory);
             // Whole-scene disabled must still run the native renderer.
-            assert(!gpu_scene.dirty && gpu_scene.draws==0);
+            assert(!gpuSceneActive().dirty && gpu_scene.draws==0);
         }
         // A CPU upload must invalidate the target and seed from fresh data.
         renderer_flush_queues();memory[0]=0x7777;renderer_update_caches(0,0,1,1);
@@ -86,7 +86,7 @@ int main() {
         gpu.status.rgb24=0;gpu.status.blanking=0;gpu.state.fb_dirty=1;
         GPUScreenInfo_t info;GPU_getScreenInfo(&info);
         assert(gpu_scene.expanded==0); // per-frame metadata is not a readback
-        GPU_updateLace();assert(gpu_scene.expanded==0 && flips==s);
+        GPU_updateLace();assert(gpu_scene.expanded==0);
         assert(screen[16u*320u+16u]==0xf800u);
         pl_data.sinfo=info;uint16_t preview[160u*120u];
         pl_screenshot_160x120_rgb565(preview);assert(gpu_scene.resolves==1);
@@ -114,14 +114,43 @@ int main() {
         commands(q,5);const uint64_t resolves=gpu_scene.resolves;
         renderer_vram_write_begin(700,400,8,8);memory[400u*1024u+700u]=123;
         renderer_update_caches(700,400,8,8);
-        assert(gpu_scene.valid && gpu_scene.dirty && gpu_scene.resolves==resolves);
+        assert(gpuSceneActive().valid && gpuSceneActive().dirty && gpu_scene.resolves==resolves);
         // Save/load must resolve pending pixels and discard the old surface
         // before restoring native VRAM; a later draw must not resurrect it.
         static GPUFreeze_t state;
-        GPU_freeze(1,&state);assert(!gpu_scene.dirty);
-        commands(tile,3);GPU_freeze(0,&state);assert(!gpu_scene.valid);
+        GPU_freeze(1,&state);assert(!gpuSceneActive().dirty);
+        commands(tile,3);GPU_freeze(0,&state);assert(!gpuSceneActive().valid);
         assert(!memcmp(memory,state.psxVRam,sizeof memory));
         renderer_finish();
+    }
+    // Gran Turismo alternates y=0 and y=240 framebuffers. Keep both reduced:
+    // changing draw area and displaying the other buffer must not resolve it.
+    for(unsigned s=1;s<=3;++s) {
+        init(s);
+        uint32_t a[]={0x020000ffu,xy(0,0),xy(320,240)};
+        uint32_t b[]={0x0200ff00u,xy(0,240),xy(320,240)};
+        commands(a,3);commands(b,3);
+        assert(gpu_scene.seeded==0 && gpu_scene.expanded==0);
+        assert(gpu_scene.cache[0].valid && gpu_scene.cache[1].valid);
+        for(unsigned flip=0;flip<8;++flip) {
+            const unsigned y=(flip&1u)?240:0;
+            uint32_t area[]={0xe3000000u|(y<<10),0xe4000000u|319u|((y+239u)<<10)};
+            commands(area,2);
+            commands((flip&1u)?b:a,3);
+            gpu.screen.x=0;gpu.screen.y=y;gpu.screen.hres=320;gpu.screen.vres=240;gpu.screen.h=240;
+            gpu.status.rgb24=0;gpu.status.blanking=0;gpu.state.fb_dirty=1;
+            GPU_updateLace();assert(gpu_scene.expanded==0);
+            const uint16_t expected=(flip&1u)?0x07c0u:0xf800u;
+            for(unsigned i=0;i<320u*240u;++i) assert(screen[i]==expected);
+        }
+        assert(memory[0]==0 && memory[240u*1024u]==0);
+        renderer_flush_queues();assert(gpu_scene.resolves==2);
+        assert(memory[0]==31 && memory[240u*1024u]==(31u<<5));
+        // A write to only the top buffer preserves the bottom cached image.
+        renderer_vram_write_begin(0,0,320,240);
+        renderer_update_caches(0,0,320,240);
+        unsigned valid=0;for(unsigned i=0;i<2;++i) valid+=gpu_scene.cache[i].valid;
+        assert(valid==1);renderer_finish();
     }
     // Uploaded bitmap and 24-bit movie pixels are sampled across the entire
     // display, with no font/HUD exceptions and with VRAM address wrapping.

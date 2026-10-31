@@ -9,6 +9,8 @@
 
 ## Escena completa y presentación — actualización 2026-10-31
 
+- Seguimiento: las copias GP0(80) sin ancho/alto o con origen/destino en la misma posición no consumen VRAM en `gpuMoveImage`. La barrera de escena completa ahora omite la expansión/invalidez para esos casos. Las copias efectivas conservan la barrera anterior; no cambiar sus casos de solapamiento o vuelta de VRAM.
+- El presentador directo de superficies pequeñas también agrupa colores repetidos, además de filas. Los tests del presentador cubren 12.096 casos (9.216 nativos y 2.880 de superficie), y la integración compara pantalla y VRAM final con la barrera anterior, incluidos feedback y uploads. Estos cambios no acreditan FPS en la consola.
 - La [PR #11](https://github.com/RealLotex/pcsx4all/pull/11) reúne los controles gráficos, el renderizado de toda la escena y la presentación agrupada. No contiene los prototipos descartados del asignador de registros, divisiones ni Gouraud uniforme. El código CPU/GTE de master se conserva.
 - El antiguo nombre Internal resolution describía sólo muestreo de ciertos polígonos. Se reemplazó por superficies reducidas para todos los tipos de primitivas, incluidos sprites, texto y HUD; ambos buffers se conservan entre flips. En 320x240, Half/Quarter/Eighth dibujan a 160x120/80x60/40x30. El usuario autorizó reducir también las fuentes. Es un modo gráfico deliberadamente inexacto; Original sigue siendo el valor predeterminado.
 - Compilar con `INTERNAL_RESOLUTION=1` habilita el menú y selecciona por defecto la implementación de escena completa (`FULL_SCENE=1`). El build predeterminado conserva `INTERNAL_RESOLUTION=0`; `FULL_SCENE=0` queda para comparar el prototipo selectivo antiguo. Detalles y límites: [FULL_SCENE_RESOLUTION.md](FULL_SCENE_RESOLUTION.md).

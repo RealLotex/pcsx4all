@@ -696,6 +696,12 @@ int do_cmd_list(unsigned int *list, int list_len, int *last_cmd)
 
       case 0x80:          //  vid -> vid
         #ifdef GPU_UNAI_FULL_SCENE
+        // gpuMoveImage returns without touching VRAM for these packets.
+        // Keep pending reduced buffers alive instead of expanding and
+        // discarding them for a transfer which has no memory consumer.
+        if (!packet.U2[6] || !packet.U2[7] ||
+            ((packet.U2[2]&1023)==(packet.U2[4]&1023) &&
+             (packet.U2[3]&511)==(packet.U2[5]&511))) break;
         gpuSceneFlush();gpuSceneInvalidate();
         #endif
         gpuMoveImage(packet);

@@ -27,6 +27,8 @@ STRIP = $(CROSS_COMPILE)strip
 RECOMPILER = mips
 # Exact signed-32 GTE accumulator overflow test; set to 0 for comparison.
 GTE_SIGNED32_BOUNDS ?= 1
+# Dedicated synthetic interpreter/dynarec executable; keep normal startup by default.
+DYNAREC_TEST ?= 0
 
 RM     = rm -f
 MD     = mkdir
@@ -59,6 +61,11 @@ CFLAGS = $(C_ARCH) -fno-common -mno-abicalls -fno-PIC -fdata-sections -ffunction
 CFLAGS += -D$(shell echo $(GPU) | tr a-z A-Z)
 CFLAGS += -D$(shell echo $(SPU) | tr a-z A-Z)
 CFLAGS += -DFORCE_MEMCPY32
+# Rebuild emitters and test entry points when their included headers change.
+CFLAGS += -MMD -MP
+ifeq ($(DYNAREC_TEST),1)
+CFLAGS += -DMIPSREC_DIFFERENTIAL_TEST
+endif
 ifeq ($(INTERNAL_RESOLUTION)$(USE_GPULIB),11)
 CFLAGS += -DGPU_UNAI_LOWRES_EXPERIMENT
 ifeq ($(FULL_SCENE),1)
@@ -251,3 +258,5 @@ opk: all
 	pcsx4all/backdrop.png \
 	pcsx4all/pcsx4all.opk \
 	-all-root -noappend -no-exports -no-xattrs
+
+-include $(OBJS:.o=.d)

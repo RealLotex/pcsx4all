@@ -214,6 +214,9 @@ do { \
 #define LHU(rt, rs, imm16) \
 	write32(0x94000000 | ((rs) << 21) | ((rt) << 16) | ((imm16) & 0xffff))
 
+#define SH(rt, rs, imm16) \
+	write32(0xa4000000 | ((rs) << 21) | ((rt) << 16) | ((imm16) & 0xffff))
+
 #define SW(rd, rs, imm16) \
 	write32(0xac000000 | ((rs) << 21) | ((rd) << 16) | ((imm16) & 0xffff))
 

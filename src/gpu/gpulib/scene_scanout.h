@@ -35,8 +35,8 @@ static uint64_t gpu_scene_sample_reads,gpu_scene_converted_rows,gpu_scene_copied
 // Source and 320-pixel destination are disjoint; step is 1024 or 2048 words.
 // Group identical horizontal samples, and copy repeated output rows instead
 // of reading and converting the same source pixels again.
-template<bool RGB24,bool BGR15>
-static void gpuSceneNativeScanout(const uint16_t *vram,unsigned offset,unsigned width,
+template<bool RGB24,bool BGR15,bool SURFACE>
+static void gpuSceneGroupedScanout(const uint16_t *vram,unsigned offset,unsigned width,
                                  unsigned rows,unsigned step,unsigned shift,uint16_t *dst)
 {
     unsigned samples[320],ends[320],runs=0,previous=~0u;
@@ -58,7 +58,8 @@ static void gpuSceneNativeScanout(const uint16_t *vram,unsigned offset,unsigned 
         } else {
             unsigned x=0;
             for(unsigned i=0;i<runs;++i) {
-                const uint16_t c=gpuSceneDisplayPixel(vram,offset,samples[i],RGB24,shift);
+                const uint16_t c=SURFACE ? vram[(offset>>(10u+shift))*1024u+((x0+samples[i])>>shift)] :
+                                          gpuSceneDisplayPixel(vram,offset,samples[i],RGB24,shift);
                 const uint16_t color=BGR15 ? c : (uint16_t)(((c&0x7c00u)>>10)|((c&0x03e0u)<<1)|((c&31u)<<11));
                 gpuSceneRepeatPixel(dst+x,ends[i]-x,color);x=ends[i];
 #ifdef GPU_SCENE_SCANOUT_TEST_COUNTERS
@@ -71,5 +72,19 @@ static void gpuSceneNativeScanout(const uint16_t *vram,unsigned offset,unsigned 
         }
         previous=key;dst+=320u;offset=(offset+step)&524287u;
     }
+}
+template<bool RGB24,bool BGR15>
+static void gpuSceneNativeScanout(const uint16_t *vram,unsigned offset,unsigned width,
+                                 unsigned rows,unsigned step,unsigned shift,uint16_t *dst)
+{
+    gpuSceneGroupedScanout<RGB24,BGR15,false>(vram,offset,width,rows,step,shift,dst);
+}
+// Sparse reduced surface with 1024-word stride; the caller guarantees that
+// the sampled viewport is inside a valid surface and does not wrap in X.
+template<bool BGR15>
+static void gpuSceneSurfaceScanout(const uint16_t *surface,unsigned offset,unsigned width,
+                                  unsigned rows,unsigned step,unsigned shift,uint16_t *dst)
+{
+    gpuSceneGroupedScanout<false,BGR15,true>(surface,offset,width,rows,step,shift,dst);
 }
 #endif

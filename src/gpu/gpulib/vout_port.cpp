@@ -758,24 +758,12 @@ void vout_update(void)
 		const unsigned first_y=src16_offs>>10, first_x=src16_offs&1023u;
 		if (surface && !isRGB24 && first_x>=scene_clip[0] && first_x+w0<=scene_clip[2] &&
 		    first_y>=scene_clip[1] && first_y+(unsigned)h1<=scene_clip[3]) {
-			for (unsigned x=0;x<320;++x) sample_x[x]=(first_x+sample_x[x])>>surface_shift;
-			unsigned previous_row=~0u;
-			for (int y1=y0+h1;y0<y1;y0+=incY) {
-				const unsigned row_index=(src16_offs>>10)>>surface_shift;
-				if (row_index==previous_row) memcpy(dst16,dst16-VIDEO_WIDTH,640);
-				else {
-					const u16 *row=surface+row_index*1024u;
-					for (unsigned x=0;x<320;++x) {
+			const unsigned rows=(h1+incY-1)/incY;
 #ifndef USE_BGR15
-						dst16[x]=RGB16(row[sample_x[x]]);
+			gpuSceneSurfaceScanout<false>(surface,src16_offs,w0,rows,h0,surface_shift,dst16);
 #else
-						dst16[x]=row[sample_x[x]];
+			gpuSceneSurfaceScanout<true>(surface,src16_offs,w0,rows,h0,surface_shift,dst16);
 #endif
-					}
-				}
-				previous_row=row_index;dst16+=VIDEO_WIDTH;
-				src16_offs=(src16_offs+h0)&src16_offs_msk;
-			}
 			video_flip();return;
 		}
 		for (int y1=y0+h1;y0<y1;y0+=incY) {

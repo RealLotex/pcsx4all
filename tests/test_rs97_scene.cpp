@@ -33,6 +33,24 @@ static void init(unsigned shift) {
         memory[y*1024u+512+x]=(uint16_t)(1+(x%31)+((y%31)<<5));
     renderer_update_caches(0,0,1024,512);
 }
+static void noOpTransfers(bool legacy) {
+    uint32_t moves[][4]={
+        {0x80000000u,xy(16,16),xy(400,300),xy(0,8)},
+        {0x80000000u,xy(16,16),xy(400,300),xy(8,0)},
+        {0x80000000u,xy(0,0),xy(0,0),xy(2,1)},
+        {0x80000000u,xy(19,29),xy(19,29),xy(65535,65535)},
+        // Coordinates are masked before the original copy checks equality.
+        {0x80000000u,xy(1043,541),xy(19,29),xy(320,240)}
+    };
+    for(unsigned i=0;i<sizeof moves/sizeof moves[0];++i) {
+        if(legacy) {gpuSceneFlush();gpuSceneInvalidate();}
+        const uint64_t resolves=gpu_scene.resolves,seeded=gpu_scene.seeded;
+        gpu_scene_cache_t saved[2];memcpy(saved,gpu_scene.cache,sizeof saved);
+        commands(moves[i],4);
+        assert(gpu_scene.resolves==resolves && gpu_scene.seeded==seeded);
+        assert(!memcmp(saved,gpu_scene.cache,sizeof saved));
+    }
+}
 int main() {
     uint32_t tile[]={0x600000ffu,xy(0,0),xy(320,240)};
     uint32_t flat[]={0x2000ff00u,xy(16,16),xy(144,16),xy(16,144)};
@@ -151,6 +169,38 @@ int main() {
         renderer_update_caches(0,0,320,240);
         unsigned valid=0;for(unsigned i=0;i<2;++i) valid+=gpu_scene.cache[i].valid;
         assert(valid==1);renderer_finish();
+    }
+    // Compare the old barrier for no-op transfers with deferred buffers:
+    // both framebuffers, display, texture feedback, uploads and final VRAM.
+    static uint16_t reference_screen[320u*240u];
+    for(unsigned s=0;s<=3;++s) for(unsigned pass=0;pass<2;++pass) {
+        init(s);
+        for(unsigned frame=0;frame<6;++frame) {
+            const unsigned y=(frame&1u)?240:0;
+            uint32_t area[]={0xe3000000u|(y<<10),0xe4000000u|319u|((y+239u)<<10)};
+            uint32_t clear[]={0x02000000u|(frame*0x171d29u),xy(0,y),xy(320,240)};
+            uint32_t triangle[]={0x200000ffu,xy(20,y+20),xy(124,y+20),xy(20,y+124)};
+            commands(area,2);commands(clear,3);commands(triangle,4);
+            noOpTransfers(pass==0);
+            gpu.screen.x=0;gpu.screen.y=y;gpu.screen.hres=320;gpu.screen.vres=240;gpu.screen.h=240;
+            gpu.status.rgb24=0;gpu.status.blanking=0;gpu.state.fb_dirty=1;
+            const uint64_t n=gpu_scene.resolves;
+            GPU_updateLace();
+            if(s && pass) assert(gpu_scene.resolves==n);
+        }
+        if(!pass) memcpy(reference_screen,screen,sizeof screen);
+        else assert(!memcmp(reference_screen,screen,sizeof screen));
+        // The no-op must not turn into a stale framebuffer-as-texture read.
+        uint32_t page[]={0xe1000100u};commands(page,1);
+        uint32_t textured[]={0x25008080u,xy(160,256),0,xy(288,256),0x1000000u|128,xy(160,384),128<<8};
+        commands(textured,7);
+        renderer_vram_write_begin(0,0,4,4);memory[0]=0x9234;
+        renderer_update_caches(0,0,4,4);
+        noOpTransfers(pass==0);
+        renderer_flush_queues();
+        if(!pass) memcpy(baseline,memory,sizeof memory);
+        else assert(!memcmp(baseline,memory,sizeof memory));
+        renderer_finish();
     }
     // Uploaded bitmap and 24-bit movie pixels are sampled across the entire
     // display, with no font/HUD exceptions and with VRAM address wrapping.

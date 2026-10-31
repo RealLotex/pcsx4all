@@ -18,11 +18,15 @@ families to a separate smaller render surface. Texture/CLUT storage remains
 native. Destination reads, blending and writes happen at reduced resolution.
 Scanout reads the small surface directly and enlarges it for the RS-97 screen.
 Two nonoverlapping render areas are retained across framebuffer flips. Native
-VRAM is resolved when a readback, framebuffer texture dependency, copy, cache
+VRAM is resolved when a readback, framebuffer texture dependency, actual copy, cache
 eviction or save state requires it. Framebuffer clears also fill the small
 surface directly. Uploads invalidate only overlapping surfaces. Loading a state
 discards both old surfaces before restoring VRAM. Per-frame screen metadata
 queries do not trigger expansion; screenshot pixel readers do.
+Transfers with zero width/height or identical masked source/destination do
+not read or write memory in the existing renderer. They now retain pending
+surfaces instead of forcing expansion and invalidation. Nonempty transfers
+still resolve first, including overlapping and wrapped copies.
 
 In the dispatch regression, eight overlapping 64x64 opaque quads generate
 8,192 / 2,048 / 512 destination fragments at half / quarter / eighth, compared
@@ -53,7 +57,7 @@ address and other undefined-behavior checks remain enabled.
 Actual FPS on RS-97 must be measured on the device. PC/QEMU replay CPU times
 cannot be converted into a console FPS claim.
 
-## Grouped native-VRAM scanout
+## Grouped scanout
 
 When scanout uses coherent native VRAM, neighboring output pixels can select
 the same reduced-resolution source sample, and several output rows can be
@@ -62,8 +66,15 @@ color once, and copies repeated output rows. It preserves the previous scalar
 output, including RGB24 byte wrapping, high-resolution row stepping, RGB565 or
 BGR555 conversion, odd origins and destination alignment. The draw resolution
 and image quality do not change.
+`gpuSceneSurfaceScanout` applies the same grouping directly to the sparse
+reduced surface. It avoids repeatedly converting the same color within a row;
+the caller checks that the viewport is contained in a valid surface.
 
 For a 320x240 display at Quarter, this path reads/converts 4,800 source samples
 instead of 76,800 and copies 180 of the 240 output rows. Display output still
 contains all 76,800 pixels. `test_rs97_scene_scanout.cpp` compares 9,216 cases
-against the previous per-pixel sampler, on host with sanitizers and on MIPS.
+against the previous native per-pixel sampler, plus 2,880 direct-surface cases,
+on host with sanitizers and on MIPS. Direct surfaces also read/convert 4,800
+samples in Quarter instead of the previous 19,200. The integration regression
+compares display and final native VRAM with the former no-op transfer barrier,
+including both framebuffers, texture feedback and CPU uploads.

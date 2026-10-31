@@ -733,6 +733,24 @@ void vout_update(void)
 	if (isRGB24) renderer_flush_queues();
 	const u16 *surface=renderer_scene_surface(scene_clip,&surface_shift);
 	if (scene_shift) {
+		bool scanout_fast=true;
+#ifdef GPU_SCENE_SCANOUT_TEST_ENV
+		static int scanout_mode=-1;
+		if (scanout_mode<0) scanout_mode=getenv("PCSX4ALL_FAST_SCANOUT")?atoi(getenv("PCSX4ALL_FAST_SCANOUT")):0;
+		scanout_fast=scanout_mode!=0;
+#endif
+		if (h1<=0) {video_flip();return;}
+		if (!surface && scanout_fast) {
+			const unsigned rows=(h1+incY-1)/incY;
+#ifdef USE_BGR15
+			if (isRGB24) gpuSceneNativeScanout<true,true>(src16,src16_offs,w0,rows,h0,scene_shift,dst16);
+			else gpuSceneNativeScanout<false,true>(src16,src16_offs,w0,rows,h0,scene_shift,dst16);
+#else
+			if (isRGB24) gpuSceneNativeScanout<true,false>(src16,src16_offs,w0,rows,h0,scene_shift,dst16);
+			else gpuSceneNativeScanout<false,false>(src16,src16_offs,w0,rows,h0,scene_shift,dst16);
+#endif
+			video_flip();return;
+		}
 		// Includes uploaded backgrounds, text and RGB24 movies. This scanout
 		// does not change texture memory or claim to reduce movie decoding.
 		unsigned sample_x[320];

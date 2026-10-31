@@ -1,9 +1,9 @@
 name: RS-97 optional 3D quality controls
 on:
   pull_request:
-    branches: [master, experiment-potato-textures, experiment-internal-resolution]
+    branches: [master, experiment-potato-textures, experiment-internal-resolution, experiment-full-raster]
   push:
-    branches: [experiment-potato-textures, experiment-internal-resolution, experiment-full-raster]
+    branches: [experiment-potato-textures, experiment-internal-resolution, experiment-full-raster, experiment-scene-scanout]
 permissions:
   contents: read
 jobs:
@@ -13,6 +13,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Exercise whole-scene command dispatch and VRAM barriers
         run: bash tests/run_scene_tests.sh
+      - name: Compare grouped scanout against scalar output
+        run: |
+          g++ -std=c++03 -O2 -Wall -Wextra -Werror tests/test_rs97_scene_scanout.cpp -o /tmp/test-scanout
+          /tmp/test-scanout
+          g++ -std=c++03 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer tests/test_rs97_scene_scanout.cpp -o /tmp/test-scanout-san
+          UBSAN_OPTIONS=halt_on_error=1 /tmp/test-scanout-san
       - name: Check whole-scene memory safety
         run: |
           SCENE_TEST_FLAGS='-fsanitize=address,undefined -fno-sanitize=shift,signed-integer-overflow -fno-omit-frame-pointer' SCENE_TEST_OUTPUT=/tmp/test-scene-san bash tests/run_scene_tests.sh
@@ -47,6 +53,8 @@ jobs:
         run: |
           cxx=/opt/retrofw-sdk/bin/mipsel-linux-g++
           sysroot=$(/opt/retrofw-sdk/bin/mipsel-linux-gcc --print-sysroot)
+          "$cxx" -std=c++03 -O2 -mips32 -mno-abicalls -fno-PIC -Wall -Wextra -Werror tests/test_rs97_scene_scanout.cpp -o /tmp/test-scanout-mips
+          qemu-mipsel -L "$sysroot" /tmp/test-scanout-mips
           "$cxx" -std=c++03 -O2 -mips32 -mno-abicalls -fno-PIC -Wall -Wextra -Werror -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_texture_quality.cpp -o /tmp/test-quality-mips
           qemu-mipsel -L "$sysroot" /tmp/test-quality-mips
           "$cxx" -std=c++03 -O1 -mips32 -mno-abicalls -fno-PIC -Wall -Wextra -Werror -Wno-unused-function -isystem src/gpu/gpu_unai tests/test_rs97_lowres.cpp -o /tmp/test-lowres-mips

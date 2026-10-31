@@ -50,3 +50,18 @@ address and other undefined-behavior checks remain enabled.
 
 Actual FPS on RS-97 must be measured on the device. PC/QEMU replay CPU times
 cannot be converted into a console FPS claim.
+
+## Grouped native-VRAM scanout
+
+When scanout uses coherent native VRAM, neighboring output pixels can select
+the same reduced-resolution source sample, and several output rows can be
+identical. `gpuSceneNativeScanout` groups those horizontal samples, converts each
+color once, and copies repeated output rows. It preserves the previous scalar
+output, including RGB24 byte wrapping, high-resolution row stepping, RGB565 or
+BGR555 conversion, odd origins and destination alignment. The draw resolution
+and image quality do not change.
+
+For a 320x240 display at Quarter, this path reads/converts 4,800 source samples
+instead of 76,800 and copies 180 of the 240 output rows. Display output still
+contains all 76,800 pixels. `test_rs97_scene_scanout.cpp` compares 9,216 cases
+against the previous per-pixel sampler, on host with sanitizers and on MIPS.

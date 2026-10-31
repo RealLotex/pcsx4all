@@ -1,11 +1,22 @@
 # Handoff técnico — PCSX4All / RS-97 V3.0: optimización del dynarec MIPS
 
-**Fecha:** 2026-10-27  
+**Fecha inicial:** 2026-10-27; estado actualizado el 2026-10-30
 **Repositorio de trabajo:** https://github.com/RealLotex/pcsx4all  
 **Upstream:** https://github.com/retrofw/pcsx4all  
 **Rama principal:** `master`  
 **HEAD verificado al preparar el handoff:** `4a235df9840014f99a64943d448db56e29f47d79`  
 **Pruebas CI de ese commit:** success — https://github.com/RealLotex/pcsx4all/actions/runs/40576738623
+
+## Estado actual verificado — 2026-10-30
+
+- `master` contiene la [PR #8](https://github.com/RealLotex/pcsx4all/pull/8), commit `29f7ebc7bcc758d41c2e8e6124d6015b49d877da`: comprobación exacta del desbordamiento de acumuladores GTE de 64 a 32 bits con menos ramas. Conserva el valor completo y los flags; no reducir el retorno a 32 bits ni volver a presentar esta optimización como nueva. Está habilitada por defecto; un árbol limpio con `GTE_SIGNED32_BOUNDS=0` recupera la ruta anterior.
+- Se verificaron compilaciones completas de OPK de referencia y optimizado con el SDK oficial RetroFW, pruebas host con ASan/UBSan, tres millones de entradas del helper y 220.000 comparaciones de estado completo de los 22 comandos aritméticos GTE en host y MIPS/QEMU. [CI de esa PR](https://github.com/RealLotex/pcsx4all/actions/runs/41135055000). Alcance y comandos: [RS97_GTE_SIGNED32_BOUNDS.md](RS97_GTE_SIGNED32_BOUNDS.md).
+- La comparación dentro del mismo ejecutable MIPS dio 5,2% menos tiempo de CPU en Gran Turismo, 4,0% menos en Digimon World y 3,2% menos en la calle inicial con niebla de Silent Hill, con calidad original, HLE/NTSC/rec 2.0 y frameskip desactivado. Son tres escenas locales y tiempos de QEMU; **no FPS medidos en la RS-97**. Los parches de replay, permisos JIT y lectura ISO usados en QEMU no forman parte del producto.
+- La [PR #4](https://github.com/RealLotex/pcsx4all/pull/4) conserva como experimento la política de expulsar un registro y pruebas reales intérprete/dynarec, incluida una corrección de escritura IRGB. El usuario no observó ganancia de FPS en Gran Turismo con aquella build. No está fusionada ni demuestra una mejora de rendimiento general.
+- Las [PR #6](https://github.com/RealLotex/pcsx4all/pull/6) y [#7](https://github.com/RealLotex/pcsx4all/pull/7) contienen opciones gráficas experimentales. Las cuatro primeras funcionaron en hardware, pero sin ganancia de FPS reportada. La resolución de rasterizado 3D posterior tiene mediciones locales y pérdida visible de calidad, sin medición de consola. No sustituir mejoras nativas del GTE/dynarec por estos controles ni prometer protección universal de fuentes.
+- Ya se descartaron por resultados pequeños, desiguales o negativos bajo QEMU: caché de división de proyección, ruta NCLIP de coordenadas acotadas, determinante NCLIP de dos productos y emisión directa, desplegado de RTPT y especialización de MVMVA. Las variantes de saturación `LIM` con intervalos sin signo tampoco se incorporaron: la general empeoró Gran Turismo alrededor de un 2% y la restringida a mínimo cero dio sólo alrededor de un 1% adicional en tres escenas. El SDK ya emite MADD en productos matriciales. No repetirlos sin evidencia nueva que cambie la hipótesis. La paleta iluminada de 4 bpp de la PR #5 sigue siendo experimental.
+
+Los apartados históricos siguientes describen la etapa inicial. La mejora de FPS reales en la consola sigue pendiente de comprobar; no dar el objetivo completo por alcanzado a partir de las mediciones de QEMU.
 
 ## Objetivo de la siguiente etapa
 
@@ -19,9 +30,9 @@ Se fusionaron en `master` tres PR de renderizado:
 - **PR #2:** https://github.com/RealLotex/pcsx4all/pull/2 — lectura de scanlines cuando cruzan el límite de VRAM y relleno rápido de polígonos planos opacos.
 - **PR #3:** https://github.com/RealLotex/pcsx4all/pull/3 — sprites CLUT de 4 bpp sin iluminación, mezcla ni efectos de máscara: escrituras en pares con fallback ante solapamientos.
 
-Pruebas host disponibles en `tests/test_rs97_render.cpp`, `tests/test_rs97_hotpaths.cpp`, `tests/test_rs97_sprite4bpp.cpp`; CI en `.github/workflows/rs97-renderer-tests.yml`. Las pruebas host C++03, ASan y UBSan concluyeron correctamente en el commit verificado. **No se ha confirmado una compilación completa del OPK ni un benchmark real en la RS-97.** El CI actual ejercita rutinas de renderizado, **no** el dynarec, ni puede garantizar ausencia de bloqueos o de brick.
+Pruebas host disponibles en `tests/test_rs97_render.cpp`, `tests/test_rs97_hotpaths.cpp`, `tests/test_rs97_sprite4bpp.cpp`; CI en `.github/workflows/rs97-renderer-tests.yml`. Las pruebas host C++03, ASan y UBSan concluyeron correctamente en el commit inicial verificado. Esa CI del renderer ejercita rutinas de renderizado, **no** el dynarec, ni puede garantizar ausencia de bloqueos o de brick. Las compilaciones completas posteriores y la CI del GTE se describen en la actualización anterior.
 
-**El código del dynarec todavía no fue modificado en esta línea de trabajo.**
+La optimización fusionada en esta etapa afecta al helper C del GTE llamado por el dynarec y el intérprete. La política experimental del asignador de registros y sus pruebas específicas permanecen en la PR #4.
 
 ## Arquitectura existente: no reimplementar lo que ya funciona
 
